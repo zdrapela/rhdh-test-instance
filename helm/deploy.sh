@@ -14,6 +14,12 @@ github=0 # by default don't use the Github repo unless the chart doesn't exist i
 # Validate version and determine chart version
 if [[ "$version" =~ ^([0-9]+(\.[0-9]+)?)$ ]]; then
     CV=$(curl -s "https://quay.io/api/v1/repository/rhdh/chart/tag/?onlyActiveTags=true&limit=600" | jq -r '.tags[].name' | grep "^${version}-" | sort -V | tail -n 1)
+elif [[ "$version" == "next" ]]; then
+    # 'next' is an OCI tag alias for the latest CI build; resolve to actual chart version
+    CONFIG_DIGEST=$(curl -s -H "Accept: application/vnd.oci.image.manifest.v1+json" \
+        "https://quay.io/v2/rhdh/chart/manifests/next" | jq -r '.config.digest')
+    CV=$(curl -sL "https://quay.io/v2/rhdh/chart/blobs/$CONFIG_DIGEST" | jq -r '.version')
+    echo "Resolved 'next' to chart version: ${CV}"
 elif [[ "$version" =~ CI$ ]]; then
     CV=$version
 else
@@ -57,7 +63,7 @@ if [[ "${WITH_ORCHESTRATOR}" == "1" ]]; then
         if oc get crd knativeservings.operator.knative.dev &>/dev/null; then
             INFRA_ARGS+=(--skip-crds)
         fi
-        helm install orchestrator-infra oci://quay.io/rhdh/orchestrator-infra-chart "${INFRA_ARGS[@]}"
+        helm upgrade --install orchestrator-infra oci://quay.io/rhdh/orchestrator-infra-chart "${INFRA_ARGS[@]}"
         echo "Orchestrator infrastructure chart installed successfully."
     fi
 
@@ -87,6 +93,13 @@ else
     sed -e 's/^/    /' -e 's/{{inherit}}/{{ "{{inherit}}" }}/g' \
         config/dynamic-plugins.yaml >> "$DYNAMIC_PLUGINS_FILE"
 fi
+# Lightspeed and scorecard plugins use chart defaults via {{inherit}}.
+# No custom version overrides are appended here.
+
+# Build extraAppConfig array dynamically based on enabled components
+EXTRA_APP_CONFIGS='[{"configMapRef":"app-config-rhdh","filename":"app-config-rhdh.yaml"}'
+[[ "${WITH_NFS}" == "1" ]] && EXTRA_APP_CONFIGS+=',{"configMapRef":"app-config-nfs","filename":"nfs-app-config.yaml"}'
+EXTRA_APP_CONFIGS+=']'
 
 # Build helm install arguments
 HELM_ARGS=(
@@ -96,6 +109,7 @@ HELM_ARGS=(
     --set global.catalogIndex.image.registry="quay.io"
     --set global.catalogIndex.image.repository="rhdh/plugin-catalog-index"
     --set global.catalogIndex.image.tag="${CATALOG_INDEX_TAG}"
+    --set-json "upstream.backstage.extraAppConfig=${EXTRA_APP_CONFIGS}"
     --namespace "$namespace"
 )
 
@@ -103,15 +117,57 @@ if [[ "${WITH_ORCHESTRATOR}" == "1" ]]; then
     HELM_ARGS+=(--set orchestrator.enabled=true)
 fi
 
-if [[ "${IS_AUTH_ENABLED:-false}" != "true" ]]; then
+
+# Enable New Frontend System if requested
+if [[ "${WITH_NFS}" == "1" ]]; then
+    echo "Enabling New Frontend System (app-next)..."
+    NFS_VALUES_FILE=$(mktemp)
+    trap "rm -f $DYNAMIC_PLUGINS_FILE $NFS_VALUES_FILE" EXIT
+    cat > "$NFS_VALUES_FILE" <<'EOF'
+upstream:
+  backstage:
+    extraEnvVars:
+      - name: BACKEND_SECRET
+        valueFrom:
+          secretKeyRef:
+            key: backend-secret
+            name: '{{ include "rhdh.backend-secret-name" $ }}'
+      - name: POSTGRESQL_ADMIN_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            key: postgres-password
+            name: '{{- include "rhdh.postgresql.secretName" . }}'
+      - name: BACKSTAGE_LOG_LEVEL
+        value: debug
+      - name: APP_CONFIG_app_packageName
+        value: app-next
+      - name: ENABLE_STANDARD_MODULE_FEDERATION
+        value: "true"
+EOF
+    HELM_ARGS+=(-f "$NFS_VALUES_FILE")
+fi
+
+# Lightspeed and scorecard plugins are now appended to the dynamic-plugins
+# ConfigMap by deploy.sh based on WITH_LIGHTSPEED / WITH_SCORECARD flags.
+# No additional helm overrides needed here.
+
+# Override RHDH container image if RHDH_IMAGE is set (e.g. quay.io/rhdh-community/rhdh:pr-1234)
+if [[ -n "${RHDH_IMAGE}" ]]; then
+    IMAGE_TAG="${RHDH_IMAGE##*:}"
+    IMAGE_WITHOUT_TAG="${RHDH_IMAGE%:*}"
+    IMAGE_REGISTRY="${IMAGE_WITHOUT_TAG%%/*}"
+    IMAGE_REPOSITORY="${IMAGE_WITHOUT_TAG#*/}"
+    echo "Overriding RHDH image: registry=${IMAGE_REGISTRY} repository=${IMAGE_REPOSITORY} tag=${IMAGE_TAG}"
     HELM_ARGS+=(
-        --set "upstream.backstage.extraAppConfig[1].configMapRef=app-config-guest-auth"
-        --set "upstream.backstage.extraAppConfig[1].filename=app-config-guest-auth.yaml"
+        --set upstream.backstage.image.registry="${IMAGE_REGISTRY}"
+        --set upstream.backstage.image.repository="${IMAGE_REPOSITORY}"
+        --set upstream.backstage.image.tag="${IMAGE_TAG}"
     )
 fi
 
 # Install or upgrade Helm chart
 helm upgrade --install redhat-developer-hub "${CHART_URL}" --version "$CV" "${HELM_ARGS[@]}"
+
 
 # Scale down and up to ensure fresh pods (helm does not monitor config changes)
 oc scale deployment -l 'app.kubernetes.io/instance in (redhat-developer-hub,developer-hub)' --replicas=0 -n "$namespace"

@@ -1,0 +1,55 @@
+# Disable catalog index entries that lack NFS support or have broken images
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-homepage:1.11.0--1.17.0
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-global-header@sha256:e0bf0acc1570c513ccd9bc38846ef47ce06f49c93b4d332506998ff1b7f6c04b
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-quickstart@sha256:11b3a3fcb13c5dfe9572a163d80cb8afd34bca27a0a844a472d9e9b5f35a6162
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-adoption-insights@sha256:3f12d1d5864c8fa2a8904a0fd9d4fef7a6922abf7b0974821de7d30d7cf7b208
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-analytics-module-adoption-insights@sha256:77bbb6be12bda357354315f9bb89ec2d1a3c67d7c5d4e7af33dcc0c97818cd5f
+  disabled: true
+
+# Core NFS plugins
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-defaults:bs_1.52.0__0.0.2
+  disabled: false
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-auth:bs_1.52.0__0.1.0
+  disabled: false
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-integrations:bs_1.52.0__0.1.0
+  disabled: false
+
+# Global Header
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-global-header:bs_1.52.0__1.22.0
+  disabled: false
+
+# Quickstart
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-quickstart:bs_1.52.0__1.12.2
+  disabled: false
+
+# Homepage (RHDH homepage depends on upstream backstage-plugin-home — both must be enabled)
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-home:bs_1.52.0__0.9.7
+  disabled: false
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-homepage:bs_1.52.0__1.17.0
+  disabled: false
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-homepage-backend:bs_1.52.0__0.4.0
+  disabled: false
+
+# Adoption Insights + Analytics
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-adoption-insights:bs_1.52.0__0.9.0
+  disabled: false
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-adoption-insights-backend:bs_1.52.0__0.9.0
+  disabled: false
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-analytics-module-adoption-insights:bs_1.52.0__0.9.0
+  disabled: false
+
+# Tekton
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-tekton:bs_1.52.0__3.40.0
+  disabled: false
+
+# Topology
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-topology:bs_1.52.0__2.15.0
+  disabled: false
+
+# Theme (NFS-compatible RHDH theme)
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-theme:bs_1.52.0__0.15.0
+  disabled: false

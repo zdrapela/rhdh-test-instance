@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 # Default values
@@ -7,28 +7,51 @@ installation_method=""
 CV=""
 github=0 # by default don't use the Github repo unless the chart doesn't exist in the OCI registry
 WITH_ORCHESTRATOR=0
+WITH_NFS=0
+WITH_LIGHTSPEED=0
+WITH_SCORECARD=0
+WITH_RBAC=0
+
+# Available components for --with flag
+AVAILABLE_COMPONENTS="nfs, lightspeed, scorecard, orchestrator, rbac (or 'all')"
 
 # Parse arguments
 if [[ $# -lt 2 ]]; then
-    echo "Usage: $0 <installation-method> <version> [--namespace <ns>] [--with-orchestrator]"
+    echo "Usage: $0 <installation-method> <version> [--namespace <ns>] [--with <components>] [--plugins <list>]"
     echo "Installation methods: helm, operator"
     echo "Options:"
-    echo "  --namespace <ns>       Deploy to specified namespace (default: rhdh)"
-    echo "  --with-orchestrator    Deploy with orchestrator support"
-    echo "  --plugins <list>       Deploy with plugins support (default: none)"
+    echo "  --namespace <ns>         Deploy to specified namespace (default: rhdh)"
+    echo "  --with <components>      Comma-separated list of optional components to enable"
+    echo "                           Available: ${AVAILABLE_COMPONENTS}"
+    echo "  --plugins <list>         Infrastructure plugins (default: keycloak is always included)"
     echo "Examples:"
-    echo "  $0 helm 1.5-171-CI"
     echo "  $0 helm next"
-    echo "  $0 operator 1.5"
-    echo "  $0 helm 1.9 --with-orchestrator"
-    echo "  $0 helm 1.9 --namespace rhdh-helm --with-orchestrator"
-    echo "  $0 helm 1.9 --plugins keycloak,lighthouse"
+    echo "  $0 helm next --with nfs,lightspeed"
+    echo "  $0 helm next --with all"
+    echo "  $0 helm next --namespace my-test --with nfs,scorecard"
+    echo "  $0 operator 1.9 --with orchestrator"
     exit 1
 fi
 
 installation_method="$1"
 version="$2"
 shift 2
+
+_enable_component() {
+    case "$1" in
+        all)
+            WITH_ORCHESTRATOR=1; WITH_NFS=1; WITH_LIGHTSPEED=1; WITH_SCORECARD=1; WITH_RBAC=1
+            ;;
+        nfs)           WITH_NFS=1 ;;
+        lightspeed)    WITH_LIGHTSPEED=1 ;;
+        scorecard)     WITH_SCORECARD=1 ;;
+        orchestrator)  WITH_ORCHESTRATOR=1 ;;
+        rbac)          WITH_RBAC=1 ;;
+        *)
+            echo "Warning: Unknown component '$1'. Available: ${AVAILABLE_COMPONENTS}"
+            ;;
+    esac
+}
 
 # Parse optional flags
 while [[ $# -gt 0 ]]; do
@@ -37,10 +60,12 @@ while [[ $# -gt 0 ]]; do
             namespace="$2"
             shift 2
             ;;
-        --with-orchestrator)
-            WITH_ORCHESTRATOR=1
-            echo "Orchestrator support enabled"
-            shift
+        --with)
+            IFS=',' read -ra _components <<< "$2"
+            for _comp in "${_components[@]}"; do
+                _enable_component "$_comp"
+            done
+            shift 2
             ;;
         --plugins)
             PLUGINS="$2"
@@ -48,13 +73,28 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             echo "Error: Unknown option: $1"
-            echo "Usage: $0 <installation-method> <version> [--namespace <ns>] [--with-orchestrator]"
+            echo "Usage: $0 <installation-method> <version> [--namespace <ns>] [--with <components>] [--plugins <list>]"
             exit 1
             ;;
     esac
 done
 
+# Print enabled components
+_enabled=()
+[[ "${WITH_NFS}" == "1" ]] && _enabled+=("nfs")
+[[ "${WITH_ORCHESTRATOR}" == "1" ]] && _enabled+=("orchestrator")
+[[ "${WITH_LIGHTSPEED}" == "1" ]] && _enabled+=("lightspeed")
+[[ "${WITH_SCORECARD}" == "1" ]] && _enabled+=("scorecard")
+[[ "${WITH_RBAC}" == "1" ]] && _enabled+=("rbac")
+if [[ ${#_enabled[@]} -gt 0 ]]; then
+    echo "Enabled components: ${_enabled[*]}"
+fi
+
 export WITH_ORCHESTRATOR
+export WITH_NFS
+export WITH_LIGHTSPEED
+export WITH_SCORECARD
+export WITH_RBAC
 
 # Validate installation method
 if [[ "$installation_method" != "helm" && "$installation_method" != "operator" ]]; then
@@ -97,15 +137,35 @@ setup_resources
 export IS_AUTH_ENABLED="${IS_AUTH_ENABLED:-false}"
 
 source scripts/config-plugins.sh
+PLUGINS="${PLUGINS:+${PLUGINS},}keycloak"
 if [[ -n "${PLUGINS:-}" ]]; then
     main "$PLUGINS"
 fi
 
-# If no auth plugin set IS_AUTH_ENABLED=true, mount the guest auth ConfigMap.
-if [[ "${IS_AUTH_ENABLED}" != "true" ]]; then
-    export GUEST_AUTH_CONFIG_MAP_ENTRY="        - name: app-config-guest-auth"
-else
-    export GUEST_AUTH_CONFIG_MAP_ENTRY=""
+if [[ "${WITH_NFS}" == "1" ]]; then
+    _append_plugin_dynamic_config "${PWD}/config/nfs-dynamic-plugins.yaml" "NFS"
+    oc create configmap app-config-nfs \
+        --from-file=nfs-app-config.yaml="${PWD}/config/nfs-app-config.yaml" \
+        --namespace="${NAMESPACE}" \
+        --dry-run=client -o yaml | oc apply -f - --namespace="${NAMESPACE}"
+fi
+
+if [[ "${WITH_ORCHESTRATOR}" == "1" ]]; then
+    _append_plugin_dynamic_config "${PWD}/config/orchestrator-dynamic-plugins.yaml" "Orchestrator"
+fi
+
+if [[ "${WITH_LIGHTSPEED}" == "1" ]]; then
+    _append_plugin_dynamic_config "${PWD}/config/lightspeed-dynamic-plugins.yaml" "Lightspeed"
+    source scripts/setup-lightspeed.sh
+    setup_lightspeed_resources
+fi
+
+if [[ "${WITH_SCORECARD}" == "1" ]]; then
+    _append_plugin_dynamic_config "${PWD}/config/scorecard-dynamic-plugins.yaml" "Scorecard"
+fi
+
+if [[ "${WITH_RBAC}" == "1" ]]; then
+    _append_plugin_dynamic_config "${PWD}/config/rbac-dynamic-plugins.yaml" "RBAC"
 fi
 
 if [[ "$installation_method" == "helm" ]]; then
@@ -118,6 +178,11 @@ else
         source operator/install-operator.sh "$version"
     fi
     source operator/deploy.sh "$namespace" "$version"
+fi
+
+# Patch deployment with LCS sidecar only if an LLM provider is configured
+if [[ "${WITH_LIGHTSPEED}" == "1" && "${LIGHTSPEED_HAS_PROVIDER}" == "true" ]]; then
+    patch_lightspeed_sidecar
 fi
 
 # Wait for the deployment to be ready

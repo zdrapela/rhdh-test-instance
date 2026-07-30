@@ -7,9 +7,7 @@
 #     plugins: []
 upstream:
   backstage:
-    extraAppConfig:
-      - configMapRef: app-config-rhdh
-        filename: app-config-rhdh.yaml
+    # extraAppConfig is built dynamically by helm/deploy.sh based on enabled components
     extraEnvVarsSecrets:
       - rhdh-secrets
     extraEnvVars: # need to look to see if these are required or not ...

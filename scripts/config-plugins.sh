@@ -31,7 +31,7 @@ _append_plugin_dynamic_config() {
 # =============================================================================
 
 declare -A CATEGORY_SETUP_FUNCTIONS=(
-  [KEYCLOAK]="deploy_keycloak config_secrets_for_keycloak_plugins create_users_and_groups_keycloak apply_keycloak_labels"
+  [KEYCLOAK]="deploy_keycloak create_users_and_groups_keycloak register_keycloak_client config_secrets_for_keycloak_plugins apply_keycloak_labels"
   # [TEKTON]="deploy_tekon deploy_pipelines apply_tekton_labels"
   # [OCM]="deploy_acm config_secrets_for_ocm_plugins deploy_multicluster_hub apply_ocm_labels"
   # [3SCALE]="copy_3scale_files deploy_3scale deploy_minio deploy_3scale_resources"
@@ -43,11 +43,13 @@ declare -A CATEGORY_SETUP_FUNCTIONS=(
   # [NOTIFICATIONS]="config_secrets_for_notifications_plugins populate_notifications_demo_data register_notifications_demo_catalog_entities"
   # [JENKINS]="deploy_jenkins wait_for_jenkins_and_populate_demo_data config_secrets_for_jenkins_plugins apply_jenkins_labels register_jenkins_demo_catalog_entities"
   # [JFROG_ARTIFACTORY]="deploy_jfrog_artifactory wait_for_jfrog_and_populate_demo_data config_secrets_for_jfrog_artifactory_plugins apply_jfrog_artifactory_labels register_jfrog_artifactory_demo_catalog_entities"
+  [KEYCLOAK_INFRA]="deploy_keycloak create_users_and_groups_keycloak apply_keycloak_labels"
   [LIGHTHOUSE]="deploy_lighthouse config_secrets_for_lighthouse_plugins apply_lighthouse_labels run_lighthouse_initial_scan"
 )
 
 declare -A CATEGORY_TEARDOWN_FUNCTIONS=(
   [KEYCLOAK]="uninstall_keycloak"
+  [KEYCLOAK_INFRA]="uninstall_keycloak_infra"
   # [TEKTON]="uninstall_tekton"
   # [OCM]="uninstall_acm"
   # [3SCALE]="uninstall_3scale"

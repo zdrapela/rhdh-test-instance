@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lightspeed-config
+data:
+  config.yaml: |
+    version: 3
+    distro_name: developer-lightspeed-lls-0.5.x
+    apis:
+      - inference
+      - safety
+      - tool_runtime
+    container_image:
+    external_providers_dir: '/app-root/providers.d'
+    providers:
+      inference:
+        - provider_id: ${env.ENABLE_VLLM:+vllm}
+          provider_type: remote::vllm
+          config:
+            base_url: ${env.VLLM_URL:=}
+            api_token: ${env.VLLM_API_KEY:=}
+            max_tokens: ${env.VLLM_MAX_TOKENS:=4096}
+            network:
+              tls:
+                verify: ${env.VLLM_TLS_VERIFY:=true}
+        - provider_id: ${env.ENABLE_OLLAMA:+ollama}
+          provider_type: remote::ollama
+          config:
+            base_url: ${env.OLLAMA_URL:=http://localhost:11434/v1}
+        - provider_id: ${env.ENABLE_OPENAI:+openai}
+          provider_type: remote::openai
+          config:
+            api_key: ${env.OPENAI_API_KEY:=}
+        - provider_id: ${env.ENABLE_VERTEX_AI:+vertexai}
+          provider_type: remote::vertexai
+          config:
+            project: ${env.VERTEX_AI_PROJECT:=}
+            location: ${env.VERTEX_AI_LOCATION:=global}
+        - provider_id: sentence-transformers
+          provider_type: inline::sentence-transformers
+          config: {}
+      tool_runtime:
+        - provider_id: model-context-protocol
+          provider_type: remote::model-context-protocol
+          config: {}
+      safety:
+        - provider_id: ${env.ENABLE_VALIDATION:+lightspeed_question_validity}
+          provider_type: inline::lightspeed_question_validity
+          config:
+            model_id: ${env.VALIDATION_PROVIDER:=}/${env.VALIDATION_MODEL_NAME:=}
+            model_prompt: |-
+              Instructions:
+              You are a question classifier. Respond with ONLY "1" or "0".
+              "1" means appropriate, "0" means not appropriate.
+    metadata_store:
+      type: sqlite
+      db_path: '/tmp/distributions'
+    kv_stores:
+      - type: sqlite
+        db_path: '/tmp/kv_data'
+        namespace: null
+        identifier: kv_default
+    sql_stores:
+      - type: sqlite
+        db_path: '/tmp/sql_data'
+        identifier: sql_default

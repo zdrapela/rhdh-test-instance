@@ -1,37 +1,67 @@
 NAMESPACE ?= rhdh
-VERSION ?= 1.9
-ORCH ?= false
+VERSION ?= next
+WITH ?=
 PLUGINS ?=
 USE_CONTAINER ?= false
 CATALOG_INDEX_TAG ?=
+RHDH_IMAGE ?=
 RUNNER_IMAGE ?= quay.io/rhdh-community/rhdh-e2e-runner:main
+OPERATOR_NAMESPACE ?= rhdh-operator-system
+KEYCLOAK_NS ?= rhdh-keycloak
 
 export CATALOG_INDEX_TAG
+export RHDH_IMAGE
+export OPERATOR_NAMESPACE
+export KEYCLOAK_NS
 
 # Build deploy flags
+# WITH=<components>  Comma-separated list of optional components to enable
+#   Available: nfs, lightspeed, scorecard, orchestrator (or "all")
+# PLUGINS=<infra>    Comma-separated infrastructure plugins (keycloak is always auto-included)
 DEPLOY_FLAGS = --namespace $(NAMESPACE)
-ifeq ($(ORCH),true)
-DEPLOY_FLAGS += --with-orchestrator
+ifneq ($(WITH),)
+DEPLOY_FLAGS += --with $(WITH)
 endif
 ifneq ($(PLUGINS),)
 DEPLOY_FLAGS += --plugins $(PLUGINS)
 endif
 
+# ── Shared Keycloak ───────────────────────────────────────────────────────────
+
+.PHONY: deploy-keycloak undeploy-keycloak
+
+deploy-keycloak: ## Deploy shared Keycloak into KEYCLOAK_NS (auto-runs with PLUGINS=keycloak)
+	@CLUSTER_ROUTER_BASE=$$(oc get route console -n openshift-console -o=jsonpath='{.spec.host}' | sed 's/^[^.]*\.//'); \
+	export CLUSTER_ROUTER_BASE; \
+	[[ -f .env ]] && source .env; \
+	source scripts/plugins/config-keycloak-plugin.sh && \
+	deploy_keycloak && \
+	create_users_and_groups_keycloak && \
+	apply_keycloak_labels
+
+undeploy-keycloak: ## Remove the shared Keycloak infra from KEYCLOAK_NS (only after all instances are gone)
+	@source scripts/plugins/config-keycloak-plugin.sh && uninstall_keycloak_infra
+	@echo "To also delete the namespace: oc delete project $(KEYCLOAK_NS)"
+
 # ── Deploy ────────────────────────────────────────────────────────────────────
 
 .PHONY: deploy-helm install-operator deploy-operator
 
-deploy-helm: ## Deploy RHDH via Helm (ORCH=1 for orchestrator, USE_CONTAINER=1 to run in container)
+deploy-helm: ## Deploy RHDH via Helm (WITH=nfs,lightspeed,scorecard,orchestrator or all)
 ifeq ($(USE_CONTAINER),true)
 	$(MAKE) run-in-runner CMD="./deploy.sh helm $(VERSION) $(DEPLOY_FLAGS)"
 else
 	./deploy.sh helm $(VERSION) $(DEPLOY_FLAGS)
 endif
 
-install-operator: ## Install RHDH operator on cluster (one-time, runs in container)
-	$(MAKE) run-in-runner CMD="source operator/install-operator.sh $(VERSION)"
+install-operator: ## Install RHDH operator on cluster (USE_CONTAINER=true to run in container)
+ifeq ($(USE_CONTAINER),true)
+	$(MAKE) run-in-runner CMD="bash operator/install-operator.sh $(VERSION)"
+else
+	bash operator/install-operator.sh $(VERSION)
+endif
 
-deploy-operator: ## Deploy RHDH instance via Operator (ORCH=1 for orchestrator, USE_CONTAINER=1 to run in container)
+deploy-operator: ## Deploy RHDH instance via Operator (WITH=nfs,lightspeed,scorecard,orchestrator or all)
 ifeq ($(USE_CONTAINER),true)
 	$(MAKE) run-in-runner CMD="./deploy.sh operator $(VERSION) $(DEPLOY_FLAGS)"
 else
@@ -40,7 +70,7 @@ endif
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 
-.PHONY: undeploy-helm undeploy-operator undeploy-infra undeploy-plugins clean
+.PHONY: undeploy-helm undeploy-operator undeploy-infra undeploy-plugins uninstall-operator clean
 
 undeploy-helm: ## Uninstall Helm RHDH release and all cluster resources (PLUGINS=keycloak,lighthouse to also teardown plugin infra)
 ifdef PLUGINS
@@ -65,7 +95,11 @@ endif
 undeploy-infra: ## Uninstall orchestrator infra chart
 	helm uninstall orchestrator-infra -n $(NAMESPACE) || true
 
-clean: ## Delete the entire namespace (removes everything)
+uninstall-operator: ## Uninstall the RHDH operator (deletes the operator namespace)
+	oc delete project $(OPERATOR_NAMESPACE) --ignore-not-found
+	@echo "Operator uninstalled. RHDH CRDs may linger until all Backstage CRs are removed."
+
+clean: ## Delete the entire deployment namespace (does NOT uninstall the operator)
 	oc delete project $(NAMESPACE) --ignore-not-found
 
 # ── Status ────────────────────────────────────────────────────────────────────

@@ -7,7 +7,6 @@ spec:
     appConfig:
       configMaps:
         - name: app-config-rhdh
-${GUEST_AUTH_CONFIG_MAP_ENTRY}
       mountPath: /opt/app-root/src
     extraFiles:
       mountPath: /opt/app-root/src

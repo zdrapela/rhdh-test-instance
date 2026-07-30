@@ -90,10 +90,35 @@ apply_catalog_entities() {
 
   local catalog_dir="${ROOT_DIR}/resources/catalog-entities"
 
-  for yaml_file in "${catalog_dir}"/*.yaml; do
-    echo "  Applying: $(basename "$yaml_file")"
-    envsubst '${RHDH_BASE_URL}' < "${yaml_file}" | oc apply -f - --namespace="${NAMESPACE}"
+  # Always apply: plugins.yaml (lightweight Location references)
+  for f in plugins.yaml; do
+    if [[ -f "${catalog_dir}/${f}" ]]; then
+      echo "  Applying: ${f}"
+      envsubst '${RHDH_BASE_URL}' < "${catalog_dir}/${f}" | oc apply -f - --namespace="${NAMESPACE}"
+    fi
   done
+
+  # Conditional: components.yaml (Lighthouse/Keycloak demos) — only if lighthouse or keycloak plugins
+  if [[ "${PLUGINS:-}" == *"lighthouse"* ]] || [[ "${PLUGINS:-}" == *"keycloak"* ]]; then
+    for f in components.yaml resources.yaml; do
+      if [[ -f "${catalog_dir}/${f}" ]]; then
+        echo "  Applying: ${f}"
+        envsubst '${RHDH_BASE_URL}' < "${catalog_dir}/${f}" | oc apply -f - --namespace="${NAMESPACE}"
+      fi
+    done
+  else
+    echo "  Skipping: components.yaml, resources.yaml (no lighthouse/keycloak plugins)"
+  fi
+
+  # Conditional: operators.yaml — only if orchestrator is enabled
+  if [[ "${WITH_ORCHESTRATOR:-0}" == "1" ]]; then
+    if [[ -f "${catalog_dir}/operators.yaml" ]]; then
+      echo "  Applying: operators.yaml"
+      envsubst '${RHDH_BASE_URL}' < "${catalog_dir}/operators.yaml" | oc apply -f - --namespace="${NAMESPACE}"
+    fi
+  else
+    echo "  Skipping: operators.yaml (orchestrator not enabled)"
+  fi
 
   echo "Catalog entities applied!"
 }
@@ -114,15 +139,13 @@ apply_rhdh_configmaps() {
     --namespace="${NAMESPACE}" \
     --dry-run=client -o yaml | oc apply -f - --namespace="${NAMESPACE}"
 
-  oc create configmap app-config-guest-auth \
-    --from-file="${ROOT_DIR}/config/app-config-guest-auth.yaml" \
-    --namespace="${NAMESPACE}" \
-    --dry-run=client -o yaml | oc apply -f - --namespace="${NAMESPACE}"
-
+  # Force-replace dynamic-plugins to ensure a clean slate before plugin
+  # scripts append their entries (oc apply merges, which causes duplicates
+  # on repeated deploys).
   oc create configmap dynamic-plugins \
     --from-file="${ROOT_DIR}/config/dynamic-plugins.yaml" \
     --namespace="${NAMESPACE}" \
-    --dry-run=client -o yaml | oc apply -f - --namespace="${NAMESPACE}"
+    --dry-run=client -o yaml | oc replace --force -f - --namespace="${NAMESPACE}"
 
   echo "RHDH ConfigMaps applied!"
 }
@@ -165,6 +188,13 @@ apply_image_stream_imports() {
   for yaml_file in "${image_stream_dir}"/*.yaml; do
     local name
     name=$(basename "$yaml_file")
+
+    # lighthouse images only needed when lighthouse plugin is enabled
+    if [[ "${name}" == "lighthouse-import.yaml" && "${PLUGINS:-}" != *"lighthouse"* ]]; then
+      echo "  Skipping: ${name} (lighthouse plugin not enabled)"
+      continue
+    fi
+
     echo "  Applying: ${name}"
     oc apply -f "${yaml_file}" --namespace="${NAMESPACE}" || \
       echo "  Warning: Failed to apply ${name} — continuing."
@@ -220,7 +250,7 @@ teardown_resources() {
   oc delete secret rhdh-secrets --namespace="${NAMESPACE}" 2>/dev/null || true
 
   echo "Removing RHDH ConfigMaps..."
-  oc delete configmap app-config-rhdh app-config-guest-auth dynamic-plugins \
+  oc delete configmap app-config-rhdh app-config-nfs dynamic-plugins \
     --namespace="${NAMESPACE}" 2>/dev/null || true
 
   echo "Removing catalog entity ConfigMaps..."

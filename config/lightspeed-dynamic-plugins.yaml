@@ -1,0 +1,11 @@
+# Disable catalog index lightspeed/intelligent-assistant entries
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-intelligent-assistant:1.11.0--3.0.3
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-intelligent-assistant-backend:1.11.0--3.0.3
+  disabled: true
+
+# NFS-compatible Intelligent Assistant (formerly Lightspeed)
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-intelligent-assistant:bs_1.52.0__3.0.3
+  disabled: false
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-intelligent-assistant-backend:bs_1.52.0__3.0.3
+  disabled: false

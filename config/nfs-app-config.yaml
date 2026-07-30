@@ -1,0 +1,105 @@
+app:
+  packages: all
+  extensions:
+    # - app-root-wrapper:app/drawer
+    # - app-root-wrapper:app/lightspeed-fab
+    # - translation:app/lightspeed-translations
+    - api:app/app-language:
+        config:
+          availableLanguages: ["en", "de", "fr", "it", "es", "ja"]
+          defaultLanguage: "en"
+    # - app-root-element:app/quickstart-init
+    # - translation:app/quickstart-translations
+    
+    - api:home/visits: true
+    - app-root-element:home/visit-listener: true
+    - gh-component:global-header/search:
+        config:
+          priority: 50
+    - gh-menu-item:global-header/app-launcher-devhub:
+        config:
+          title: "Custom Title"
+          sectionLabel: mySection1
+          link: https://custom.example.com
+    - page:home:
+        config:
+          path: /
+    - home-page-layout:home/dynamic-homepage-layout:
+        config:
+          customizable: true
+          widgetLayout:
+            RhdhTemplateSection:
+              priority: 200
+              breakpoints:
+                xl: { w: 12, h: 5 }
+                lg: { w: 12, h: 5 }
+                md: { w: 12, h: 5 }
+                sm: { w: 12, h: 5 }
+                xs: { w: 12, h: 7.5 }
+                xxs: { w: 12, h: 13.5 }
+            RhdhEntitySection:
+              priority: 200
+              breakpoints:
+                xl: { w: 12, h: 7 }
+                lg: { w: 12, h: 7 }
+                md: { w: 12, h: 8 }
+                sm: { w: 12, h: 9 }
+                xs: { w: 12, h: 11 }
+                xxs: { w: 12, h: 15 }
+            RhdhOnboardingSection:
+              priority: 300
+              breakpoints:
+                xl: { w: 12, h: 6 }
+                lg: { w: 12, h: 6 }
+                md: { w: 12, h: 7 }
+                sm: { w: 12, h: 8 }
+                xs: { w: 12, h: 9 }
+                xxs: { w: 12, h: 14 }
+
+  branding:
+    theme:
+      light:
+        variant: rhdh
+        palette:
+          primary:
+            main: '#0066CC'
+          rhdh:
+            general:
+              appBarBackgroundColor: '#0A1628'
+      dark:
+        variant: rhdh
+        palette:
+          primary:
+            main: '#73BCF7'
+
+globalHeader:
+  components:
+    - title: Visualizer Dashboard
+      icon: dashboard
+      link: /visualizer/tree
+      priority: 75
+  menuItems:
+    - target: app-launcher
+      title: Internal Wiki
+      icon: article
+      link: https://wiki.internal.example.com
+      sectionLabel: Resources
+      priority: 80
+    - target: app-launcher
+      title: Issue Tracker
+      icon: bug_report
+      link: https://issues.internal.example.com
+      sectionLabel: Resources
+      priority: 70
+    - target: help
+      title: FAQ
+      icon: quiz
+      link: https://faq.example.com
+      sectionLabel: Support
+      priority: 90
+    - target: help
+      title: Community Forum
+      icon: forum
+      link: https://forum.example.com
+      sectionLabel: Support
+      priority: 80

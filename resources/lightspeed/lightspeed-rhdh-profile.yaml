@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lightspeed-rhdh-profile
+data:
+  rhdh-profile.py: |
+    # RHDH customization profile for Lightspeed Core Service
+    # This file is intentionally minimal for test deployments

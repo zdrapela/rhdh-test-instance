@@ -1,26 +1,26 @@
 #!/bin/bash
 
 # =============================================================================
-# Keycloak Plugin Configuration
+# Keycloak Plugin Configuration — Shared Keycloak Model
 # =============================================================================
-# This script deploys and configures Keycloak (via Bitnami Helm chart) and
-# provisions the OIDC client, realm, and user/group data needed by the
-# Keycloak catalog backend plugin.
+# Deploys Keycloak once into a dedicated namespace (KEYCLOAK_NS, default:
+# rhdh-keycloak) and registers a per-instance OIDC client for each RHDH
+# namespace. Multiple RHDH instances share the same Keycloak, realm, users,
+# and groups — only the OIDC client differs per instance.
 #
-# Functions are structured for efficient round-robin execution:
-#   1. deploy_keycloak                     — Install Helm chart + create Route (quick)
-#   2. config_secrets_for_keycloak_plugins — Wait for readiness, then create realm/client/
-#                                            roles, write secrets, register plugin overlay
-#   3. create_users_and_groups_keycloak    — Provision groups and users via API
-#   4. apply_keycloak_labels               — Label resources for the K8s plugin
+# Functions are structured for round-robin execution via config-plugins.sh:
+#   1. deploy_keycloak                     — Install Helm chart in KEYCLOAK_NS (skip if exists)
+#   2. create_users_and_groups_keycloak    — Create realm, groups, users (idempotent)
+#   3. register_keycloak_client            — Create per-instance OIDC client
+#   4. config_secrets_for_keycloak_plugins — Write KEYCLOAK_* into rhdh-secrets in NAMESPACE
+#   5. apply_keycloak_labels               — Label Keycloak resources for the K8s plugin
 #
-# Readiness polling is embedded at the top of config_secrets_for_keycloak_plugins
-# rather than as a standalone step. This keeps the round-robin loop doing useful
-# work on other plugins instead of burning a full turn on a pure wait.
-#
-# Uses plain HTTP for the Keycloak route to avoid self-signed certificate issues
-# when RHDH (Node.js) connects to Keycloak's OIDC endpoints.
+# Environment:
+#   KEYCLOAK_NS  — Namespace for shared Keycloak infra (default: rhdh-keycloak)
+#   NAMESPACE    — RHDH instance namespace (set by deploy.sh)
 # =============================================================================
+
+KEYCLOAK_NS="${KEYCLOAK_NS:-rhdh-keycloak}"
 
 _KEYCLOAK_RELEASE_NAME="keycloak"
 _KEYCLOAK_CLIENT_FILE="${PWD}/resources/keycloak/rhdh-client.json"
@@ -28,15 +28,11 @@ _KEYCLOAK_USERS_FILE="${PWD}/resources/keycloak/users.json"
 _KEYCLOAK_GROUPS_FILE="${PWD}/resources/keycloak/groups.json"
 _KEYCLOAK_VALUES_FILE="${PWD}/resources/keycloak/keycloak-values.yaml"
 
-# Shared state set by config_secrets_for_keycloak_plugins and consumed by
-# create_users_and_groups_keycloak. Declared here so they are always in scope
-# when the file is sourced by config-plugins.sh.
 KEYCLOAK_URL=""
 ADMIN_TOKEN=""
 
 # =============================================================================
 # Helper: Keycloak REST API wrapper
-# Prefixed to avoid collisions when sourced alongside other plugin scripts.
 # =============================================================================
 _keycloak_api_call() {
   local method=$1
@@ -64,7 +60,6 @@ _keycloak_api_call() {
     return 0
   fi
 
-  # 409 Conflict is acceptable for idempotent create operations.
   if [[ "$http_code" == "409" ]]; then
     echo "Warning: ${description} — already exists (continuing)" >&2
     echo "$body"
@@ -75,90 +70,23 @@ _keycloak_api_call() {
   return 1
 }
 
-
 # =============================================================================
-# Step 1: Deploy Keycloak (quick action — no waiting)
+# Helper: Ensure Keycloak is ready and populate KEYCLOAK_URL + ADMIN_TOKEN
+#
+# Waits for the StatefulSet and API in KEYCLOAK_NS, then fetches an admin
+# token. Safe to call multiple times — skips if KEYCLOAK_URL is already set.
 # =============================================================================
-deploy_keycloak() {
-  echo "Creating namespace ${NAMESPACE}..."
-  oc create namespace "${NAMESPACE}" --dry-run=client -o yaml | oc apply -f -
-
-  # Generate Keycloak credentials only on first run — skip if the secret already
-  # exists so that re-runs against a live Keycloak never rotate passwords that
-  # the running instance depends on.
-  if oc get secret keycloak-credentials --namespace="${NAMESPACE}" &>/dev/null; then
-    echo "keycloak-credentials already exists — skipping generation."
-  else
-    echo "Generating keycloak-credentials Secret..."
-    local kc_admin_password kc_db_password kc_client_secret
-    kc_admin_password=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)
-    kc_db_password=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)
-    kc_client_secret=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
-
-    oc create secret generic keycloak-credentials \
-      --from-literal=admin-password="${kc_admin_password}" \
-      --from-literal=KEYCLOAK_ADMIN_PASSWORD="${kc_admin_password}" \
-      --from-literal=postgres-password="${kc_db_password}" \
-      --from-literal=password="${kc_db_password}" \
-      --from-literal=client-secret="${kc_client_secret}" \
-      --namespace="${NAMESPACE}"
+_keycloak_ensure_ready() {
+  if [[ -n "${KEYCLOAK_URL}" && -n "${ADMIN_TOKEN}" ]]; then
+    return 0
   fi
 
-  echo "Adding Bitnami Helm repository..."
-  helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
-  helm repo update
-
-  echo "Deploying Keycloak via Helm..."
-  helm upgrade --install "${_KEYCLOAK_RELEASE_NAME}" bitnami/keycloak \
-    --namespace "${NAMESPACE}" \
-    --values <(envsubst < "${_KEYCLOAK_VALUES_FILE}")
-
-  echo "Creating OpenShift Route (HTTP, no TLS)..."
-  oc apply -f - --namespace="${NAMESPACE}" <<EOF
-apiVersion: route.openshift.io/v1
-kind: Route
-metadata:
-  name: ${_KEYCLOAK_RELEASE_NAME}
-  namespace: ${NAMESPACE}
-  labels:
-    app.kubernetes.io/name: keycloak
-    app.kubernetes.io/instance: ${_KEYCLOAK_RELEASE_NAME}
-spec:
-  to:
-    kind: Service
-    name: ${_KEYCLOAK_RELEASE_NAME}
-    weight: 100
-  port:
-    targetPort: http
-  wildcardPolicy: None
-EOF
-
-  echo "Keycloak deployment applied!"
-}
-
-# =============================================================================
-# Step 2: Create realm/client/roles and write plugin secrets
-#         (waits for Keycloak readiness internally before proceeding)
-# =============================================================================
-config_secrets_for_keycloak_plugins() {
-  echo "Configuring Keycloak realm, client, and plugin secrets..."
-
-  if [[ ! -f "${_KEYCLOAK_CLIENT_FILE}" ]]; then
-    echo "Error: Client file not found: ${_KEYCLOAK_CLIENT_FILE}"
-    return 1
-  fi
-  jq empty "${_KEYCLOAK_CLIENT_FILE}" 2>/dev/null || {
-    echo "Error: Invalid JSON in ${_KEYCLOAK_CLIENT_FILE}"
-    return 1
-  }
-
-  # ---- Wait for StatefulSet ----
-  echo "Waiting for Keycloak StatefulSet to become ready..."
+  echo "Waiting for Keycloak StatefulSet in ${KEYCLOAK_NS}..."
   SECONDS=0
   while true; do
     local ready
     ready=$(oc get statefulset "${_KEYCLOAK_RELEASE_NAME}" \
-      --namespace="${NAMESPACE}" \
+      --namespace="${KEYCLOAK_NS}" \
       -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
     [[ "${ready}" == "1" ]] && echo "Keycloak StatefulSet is ready!" && break
     if [[ $SECONDS -ge ${TIMEOUT:-300} ]]; then
@@ -171,18 +99,16 @@ config_secrets_for_keycloak_plugins() {
 
   local keycloak_host
   keycloak_host=$(oc get route "${_KEYCLOAK_RELEASE_NAME}" \
-    --namespace="${NAMESPACE}" \
+    --namespace="${KEYCLOAK_NS}" \
     -o jsonpath='{.spec.host}' 2>/dev/null)
 
   if [[ -z "$keycloak_host" ]]; then
-    echo "Error: Could not determine Keycloak route URL."
+    echo "Error: Could not determine Keycloak route URL in ${KEYCLOAK_NS}."
     return 1
   fi
 
-  # Populate the globals consumed by create_users_and_groups_keycloak.
-  KEYCLOAK_URL="http://${keycloak_host}"
+  KEYCLOAK_URL="https://${keycloak_host}"
 
-  # ---- Wait for Keycloak API ----
   local check_url="${KEYCLOAK_URL}/realms/master"
   echo "Waiting for Keycloak API at ${check_url}..."
   SECONDS=0
@@ -201,10 +127,18 @@ config_secrets_for_keycloak_plugins() {
     sleep "${INTERVAL:-15}"
   done
 
-  echo "Getting admin token..."
+  _keycloak_refresh_admin_token
+}
+
+# =============================================================================
+# Helper: Fetch or refresh the admin token from keycloak-credentials in
+# KEYCLOAK_NS. Called by _keycloak_ensure_ready and before long-running
+# operations that may outlive the default 60s token lifetime.
+# =============================================================================
+_keycloak_refresh_admin_token() {
   local kc_admin_password
   kc_admin_password=$(oc get secret keycloak-credentials \
-    --namespace="${NAMESPACE}" \
+    --namespace="${KEYCLOAK_NS}" \
     -o jsonpath='{.data.admin-password}' | base64 -d)
 
   local token_response token_http_code token_body
@@ -224,127 +158,115 @@ config_secrets_for_keycloak_plugins() {
     echo "Error: Failed to parse admin token."
     return 1
   fi
+  echo "Admin token acquired."
+}
+
+
+# =============================================================================
+# Step 1: Deploy Keycloak infra into KEYCLOAK_NS (skip if already present)
+# =============================================================================
+deploy_keycloak() {
+  if oc get statefulset "${_KEYCLOAK_RELEASE_NAME}" -n "${KEYCLOAK_NS}" &>/dev/null; then
+    echo "Shared Keycloak already deployed in ${KEYCLOAK_NS} — skipping install."
+    # Ensure KC_HOSTNAME stays correct if the cluster changed (e.g. pool rotation)
+    local expected_hostname="${_KEYCLOAK_RELEASE_NAME}-${KEYCLOAK_NS}.${CLUSTER_ROUTER_BASE}"
+    local current_hostname
+    current_hostname=$(oc get statefulset "${_KEYCLOAK_RELEASE_NAME}" -n "${KEYCLOAK_NS}" \
+      -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="KC_HOSTNAME")].value}' 2>/dev/null)
+    if [[ "${current_hostname}" != "https://${expected_hostname}" ]]; then
+      echo "  Updating KC_HOSTNAME: ${current_hostname} → https://${expected_hostname}"
+      oc set env statefulset/"${_KEYCLOAK_RELEASE_NAME}" -n "${KEYCLOAK_NS}" \
+        KC_HOSTNAME="https://${expected_hostname}"
+      oc delete pod "${_KEYCLOAK_RELEASE_NAME}-0" -n "${KEYCLOAK_NS}" --wait=false 2>/dev/null || true
+    fi
+    return 0
+  fi
+
+  echo "Deploying shared Keycloak into namespace ${KEYCLOAK_NS}..."
+  oc create namespace "${KEYCLOAK_NS}" --dry-run=client -o yaml | oc apply -f -
+
+  if oc get secret keycloak-credentials --namespace="${KEYCLOAK_NS}" &>/dev/null; then
+    echo "keycloak-credentials already exists in ${KEYCLOAK_NS} — skipping generation."
+  else
+    echo "Generating keycloak-credentials Secret in ${KEYCLOAK_NS}..."
+    local kc_admin_password kc_db_password
+    kc_admin_password=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)
+    kc_db_password=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)
+
+    oc create secret generic keycloak-credentials \
+      --from-literal=admin-password="${kc_admin_password}" \
+      --from-literal=KEYCLOAK_ADMIN_PASSWORD="${kc_admin_password}" \
+      --from-literal=postgres-password="${kc_db_password}" \
+      --from-literal=password="${kc_db_password}" \
+      --namespace="${KEYCLOAK_NS}"
+  fi
+
+  echo "Importing Keycloak image streams into ${KEYCLOAK_NS}..."
+  local import_dir="${PWD}/resources/image-stream-imports"
+  for f in keycloak-legacy-import.yaml postgesql-legacy-import.yaml; do
+    if [[ -f "${import_dir}/${f}" ]]; then
+      oc apply -f "${import_dir}/${f}" --namespace="${KEYCLOAK_NS}" || \
+        echo "  Warning: Failed to import ${f} — continuing."
+    fi
+  done
+
+  echo "Adding Bitnami Helm repository..."
+  helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
+  helm repo update
+
+  export KEYCLOAK_HOSTNAME="${_KEYCLOAK_RELEASE_NAME}-${KEYCLOAK_NS}.${CLUSTER_ROUTER_BASE}"
+
+  echo "Deploying Keycloak via Helm into ${KEYCLOAK_NS}..."
+  # The values file uses ${NAMESPACE} for image registry paths — override it
+  # so envsubst substitutes the Keycloak namespace, not the RHDH instance NS.
+  helm upgrade --install "${_KEYCLOAK_RELEASE_NAME}" bitnami/keycloak \
+    --namespace "${KEYCLOAK_NS}" \
+    --values <(NAMESPACE="${KEYCLOAK_NS}" envsubst < "${_KEYCLOAK_VALUES_FILE}")
+
+  echo "Creating OpenShift Route (TLS edge termination) in ${KEYCLOAK_NS}..."
+  oc apply -f - --namespace="${KEYCLOAK_NS}" <<EOF
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: ${_KEYCLOAK_RELEASE_NAME}
+  namespace: ${KEYCLOAK_NS}
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/instance: ${_KEYCLOAK_RELEASE_NAME}
+spec:
+  to:
+    kind: Service
+    name: ${_KEYCLOAK_RELEASE_NAME}
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+EOF
+
+  echo "Keycloak deployment applied in ${KEYCLOAK_NS}!"
+}
+
+# =============================================================================
+# Step 2: Create realm, groups, and users in the shared Keycloak
+# =============================================================================
+create_users_and_groups_keycloak() {
+  _keycloak_ensure_ready
 
   echo "Creating realm 'rhdh'..."
   _keycloak_api_call POST "${KEYCLOAK_URL}/admin/realms" \
     '{"realm":"rhdh","enabled":true,"displayName":"RHDH Realm"}' \
     "Create realm" >/dev/null
 
-  echo "Creating OIDC client..."
-  : "${RHDH_BASE_URL:?RHDH_BASE_URL must be set — cannot build OIDC redirect URI}"
-  local rhdh_redirect_uri="${RHDH_BASE_URL}/api/auth/oidc/handler/frame"
-  local kc_client_secret
-  kc_client_secret=$(oc get secret keycloak-credentials \
-    --namespace="${NAMESPACE}" \
-    -o jsonpath='{.data.client-secret}' | base64 -d)
-
-  _keycloak_api_call POST "${KEYCLOAK_URL}/admin/realms/rhdh/clients" \
-    "$(jq -c \
-        --arg secret "${kc_client_secret}" \
-        --arg redirect_uri "${rhdh_redirect_uri}" \
-        '.secret = $secret | .redirectUris = [$redirect_uri] | .webOrigins = [$redirect_uri]' \
-        "${_KEYCLOAK_CLIENT_FILE}")" \
-    "Create client" >/dev/null
-
-  local service_account_id realm_mgmt_id roles
-
-  service_account_id=$(_keycloak_api_call GET \
-    "${KEYCLOAK_URL}/admin/realms/rhdh/users?username=service-account-rhdh-client" \
-    "" "Get service account" | jq -r '.[0].id // empty')
-
-  if [[ -z "$service_account_id" ]]; then
-    echo "Error: Service account not found — was the client created with serviceAccountsEnabled?"
-    return 1
-  fi
-
-  realm_mgmt_id=$(_keycloak_api_call GET \
-    "${KEYCLOAK_URL}/admin/realms/rhdh/clients?clientId=realm-management" \
-    "" "Get realm-management client" | jq -r '.[0].id // empty')
-
-  if [[ -z "$realm_mgmt_id" ]]; then
-    echo "Error: realm-management client not found."
-    return 1
-  fi
-
-  roles=$(_keycloak_api_call GET \
-    "${KEYCLOAK_URL}/admin/realms/rhdh/clients/${realm_mgmt_id}/roles" \
-    "" "Get roles" | \
-    jq -c '[.[] | select(.name == "view-authorization" or .name == "manage-authorization" or .name == "view-users")]')
-
-  if [[ -z "$roles" || "$roles" == "[]" ]]; then
-    echo "Error: Required service account roles not found."
-    return 1
-  fi
-
-  echo "Assigning service account roles..."
-  _keycloak_api_call POST \
-    "${KEYCLOAK_URL}/admin/realms/rhdh/users/${service_account_id}/role-mappings/clients/${realm_mgmt_id}" \
-    "$roles" "Assign service account roles" >/dev/null
-
-  # Export for use by deploy.sh and any downstream scripts.
-  export KEYCLOAK_CLIENT_SECRET="${kc_client_secret}"
-  export KEYCLOAK_CLIENT_ID="rhdh-client"
-  export KEYCLOAK_REALM="rhdh"
-  export KEYCLOAK_LOGIN_REALM="rhdh"
-  export KEYCLOAK_METADATA_URL="${KEYCLOAK_URL}/realms/rhdh"
-  export KEYCLOAK_BASE_URL="${KEYCLOAK_URL}"
-
-  oc patch secret rhdh-secrets -n "${NAMESPACE}" \
-    --type=merge -p "{\"stringData\":{
-      \"KEYCLOAK_BASE_URL\":\"${KEYCLOAK_URL}\",
-      \"KEYCLOAK_METADATA_URL\":\"${KEYCLOAK_URL}/realms/rhdh\",
-      \"KEYCLOAK_CLIENT_ID\":\"rhdh-client\",
-      \"KEYCLOAK_CLIENT_SECRET\":\"${kc_client_secret}\",
-      \"KEYCLOAK_REALM\":\"rhdh\",
-      \"KEYCLOAK_LOGIN_REALM\":\"rhdh\"}}"
-
-  export IS_AUTH_ENABLED=true
-
-  _append_plugin_dynamic_config "${PWD}/resources/keycloak/dynamic-plugins.yaml" "Keycloak"
-
-  echo "Keycloak plugin secrets and overlay configured!"
-}
-
-# =============================================================================
-# Step 4: Create groups and users in the rhdh realm
-# =============================================================================
-create_users_and_groups_keycloak() {
   echo "Creating Keycloak groups and users..."
 
-  # Generate a single random password for all test users at runtime.
-  # Alphanumeric-only avoids shell-quoting and JSON-escaping issues.
   export USER_PASSWORD
   USER_PASSWORD=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)
 
-  # Re-fetch the admin token here — the token obtained in
-  # config_secrets_for_keycloak_plugins may have expired by the time this
-  # function runs (default Keycloak token lifetime is 60s, and with hundreds
-  # of users the loop takes longer than that).
-  local kc_admin_password
-  kc_admin_password=$(oc get secret keycloak-credentials \
-    --namespace="${NAMESPACE}" \
-    -o jsonpath='{.data.admin-password}' | base64 -d)
-
-  local token_response
-  token_response=$(curl -sk -w "\n%{http_code}" -X POST \
-    "${KEYCLOAK_URL}/realms/master/protocol/openid-connect/token" \
-    -d "username=admin&password=${kc_admin_password}&grant_type=password&client_id=admin-cli")
-
-  local token_http_code token_body
-  token_http_code=$(echo "$token_response" | tail -1)
-  token_body=$(echo "$token_response" | sed '$d')
-
-  if [[ "$token_http_code" -ge 400 ]]; then
-    echo "Error: Failed to refresh admin token (HTTP ${token_http_code}): ${token_body}"
-    return 1
-  fi
-
-  ADMIN_TOKEN=$(echo "$token_body" | jq -r '.access_token // empty')
-  if [[ -z "${ADMIN_TOKEN}" ]]; then
-    echo "Error: Failed to parse refreshed admin token."
-    return 1
-  fi
-  echo "Admin token refreshed."
+  # Refresh token before the potentially long user-creation loop.
+  _keycloak_refresh_admin_token
 
   if [[ -f "${_KEYCLOAK_GROUPS_FILE}" ]]; then
     jq empty "${_KEYCLOAK_GROUPS_FILE}" 2>/dev/null || {
@@ -370,9 +292,8 @@ create_users_and_groups_keycloak() {
       local username user_payload groups user_id
       username=$(echo "$user_json" | jq -r '.username')
       groups=$(echo "$user_json" | jq -r '.groups // [] | join(",")')
-      # Inject the runtime-generated password; credentials are not stored in users.json.
       user_payload=$(echo "$user_json" | jq -c --arg pw "${USER_PASSWORD}" \
-        'del(.groups) | .credentials = [{"type":"password","value":$pw,"temporary":false}]')
+        'del(.groups) | if .credentials then . else .credentials = [{"type":"password","value":$pw,"temporary":false}] end')
 
       if ! _keycloak_api_call POST "${KEYCLOAK_URL}/admin/realms/rhdh/users" \
           "$user_payload" "Create user '${username}'" >/dev/null; then
@@ -408,32 +329,168 @@ create_users_and_groups_keycloak() {
 
   echo "Users and groups created!"
 
-  # Store test credentials in a cluster Secret so they can be retrieved after
-  # deployment via: oc get secret keycloak-test-credentials -n <namespace>
-  # All users share the same runtime-generated password; usernames come directly
-  # from users.json so there is nothing hardcoded here.
   local usernames
   usernames=$(jq -r '.[].username' "${_KEYCLOAK_USERS_FILE}" | paste -sd ',' -)
 
   oc create secret generic keycloak-test-credentials \
-    --from-literal=KEYCLOAK_URL="${KEYCLOAK_BASE_URL}" \
+    --from-literal=KEYCLOAK_URL="${KEYCLOAK_URL}" \
     --from-literal=KEYCLOAK_USERNAMES="${usernames}" \
     --from-literal=KEYCLOAK_USER_PASSWORD="${USER_PASSWORD}" \
-    --namespace="${NAMESPACE}" \
+    --namespace="${KEYCLOAK_NS}" \
     --dry-run=client -o yaml | oc apply -f -
 
   echo ""
   echo "  Keycloak test users:  ${usernames}"
-  echo "  Shared password:      (stored in secret keycloak-test-credentials)"
-  echo "  Admin credentials:    see secret keycloak-credentials (key: admin-password) in namespace ${NAMESPACE}"
+  echo "  Shared password:      (stored in secret keycloak-test-credentials in ${KEYCLOAK_NS})"
+  echo "  Admin credentials:    see secret keycloak-credentials in ${KEYCLOAK_NS}"
   echo ""
 }
 
 # =============================================================================
-# Step 5: Apply backstage.io/kubernetes-id labels
+# Step 3: Register a per-instance OIDC client for this RHDH namespace
+# =============================================================================
+register_keycloak_client() {
+  _keycloak_ensure_ready
+
+  if [[ ! -f "${_KEYCLOAK_CLIENT_FILE}" ]]; then
+    echo "Error: Client file not found: ${_KEYCLOAK_CLIENT_FILE}"
+    return 1
+  fi
+  jq empty "${_KEYCLOAK_CLIENT_FILE}" 2>/dev/null || {
+    echo "Error: Invalid JSON in ${_KEYCLOAK_CLIENT_FILE}"
+    return 1
+  }
+
+  local client_id="rhdh-client-${NAMESPACE}"
+  : "${RHDH_BASE_URL:?RHDH_BASE_URL must be set — cannot build OIDC redirect URI}"
+  local rhdh_redirect_uri="${RHDH_BASE_URL}/api/auth/oidc/handler/frame"
+
+  local kc_client_secret
+  kc_client_secret=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
+
+  echo "Creating OIDC client '${client_id}' for ${RHDH_BASE_URL}..."
+  _keycloak_api_call POST "${KEYCLOAK_URL}/admin/realms/rhdh/clients" \
+    "$(jq -c \
+        --arg cid "${client_id}" \
+        --arg secret "${kc_client_secret}" \
+        --arg redirect_uri "${rhdh_redirect_uri}" \
+        '.clientId = $cid | .name = ("RHDH Client — " + $cid) | .secret = $secret | .redirectUris = [$redirect_uri] | .webOrigins = [$redirect_uri]' \
+        "${_KEYCLOAK_CLIENT_FILE}")" \
+    "Create client '${client_id}'" >/dev/null
+
+  # If the client already existed (409), fetch its existing secret instead of
+  # using the newly generated one, so we don't desync with what Keycloak has.
+  local existing_client_uuid
+  existing_client_uuid=$(_keycloak_api_call GET \
+    "${KEYCLOAK_URL}/admin/realms/rhdh/clients?clientId=${client_id}" \
+    "" "Get client UUID" | jq -r '.[0].id // empty')
+
+  if [[ -n "$existing_client_uuid" ]]; then
+    local existing_secret
+    existing_secret=$(_keycloak_api_call GET \
+      "${KEYCLOAK_URL}/admin/realms/rhdh/clients/${existing_client_uuid}/client-secret" \
+      "" "Get client secret" | jq -r '.value // empty')
+    if [[ -n "$existing_secret" ]]; then
+      kc_client_secret="${existing_secret}"
+    fi
+  fi
+
+  # Assign service account roles for the catalog backend plugin.
+  local service_account_id realm_mgmt_id roles
+
+  service_account_id=$(_keycloak_api_call GET \
+    "${KEYCLOAK_URL}/admin/realms/rhdh/users?username=service-account-${client_id}" \
+    "" "Get service account" | jq -r '.[0].id // empty')
+
+  if [[ -z "$service_account_id" ]]; then
+    echo "Warning: Service account for ${client_id} not found — role assignment skipped."
+  else
+    realm_mgmt_id=$(_keycloak_api_call GET \
+      "${KEYCLOAK_URL}/admin/realms/rhdh/clients?clientId=realm-management" \
+      "" "Get realm-management client" | jq -r '.[0].id // empty')
+
+    if [[ -n "$realm_mgmt_id" ]]; then
+      roles=$(_keycloak_api_call GET \
+        "${KEYCLOAK_URL}/admin/realms/rhdh/clients/${realm_mgmt_id}/roles" \
+        "" "Get roles" | \
+        jq -c '[.[] | select(.name == "view-authorization" or .name == "manage-authorization" or .name == "view-users")]')
+
+      if [[ -n "$roles" && "$roles" != "[]" ]]; then
+        echo "Assigning service account roles..."
+        _keycloak_api_call POST \
+          "${KEYCLOAK_URL}/admin/realms/rhdh/users/${service_account_id}/role-mappings/clients/${realm_mgmt_id}" \
+          "$roles" "Assign service account roles" >/dev/null
+      fi
+    fi
+  fi
+
+  # Export for use by config_secrets_for_keycloak_plugins.
+  export _KC_INSTANCE_CLIENT_ID="${client_id}"
+  export _KC_INSTANCE_CLIENT_SECRET="${kc_client_secret}"
+
+  echo "OIDC client '${client_id}' registered!"
+}
+
+# =============================================================================
+# Step 4: Write Keycloak secrets into rhdh-secrets in the RHDH namespace
+# =============================================================================
+config_secrets_for_keycloak_plugins() {
+  if [[ -z "${KEYCLOAK_URL}" ]]; then
+    _keycloak_ensure_ready
+  fi
+
+  local client_id="${_KC_INSTANCE_CLIENT_ID:-rhdh-client-${NAMESPACE}}"
+  local client_secret="${_KC_INSTANCE_CLIENT_SECRET}"
+
+  # If the client secret wasn't set by register_keycloak_client (e.g. script
+  # was re-run), fetch it from Keycloak.
+  if [[ -z "${client_secret}" ]]; then
+    local client_uuid
+    client_uuid=$(_keycloak_api_call GET \
+      "${KEYCLOAK_URL}/admin/realms/rhdh/clients?clientId=${client_id}" \
+      "" "Get client UUID" | jq -r '.[0].id // empty')
+    if [[ -n "$client_uuid" ]]; then
+      client_secret=$(_keycloak_api_call GET \
+        "${KEYCLOAK_URL}/admin/realms/rhdh/clients/${client_uuid}/client-secret" \
+        "" "Get client secret" | jq -r '.value // empty')
+    fi
+  fi
+
+  if [[ -z "${client_secret}" ]]; then
+    echo "Error: Could not determine client secret for ${client_id}."
+    return 1
+  fi
+
+  echo "Patching rhdh-secrets in ${NAMESPACE} with Keycloak config..."
+
+  export KEYCLOAK_CLIENT_SECRET="${client_secret}"
+  export KEYCLOAK_CLIENT_ID="${client_id}"
+  export KEYCLOAK_REALM="rhdh"
+  export KEYCLOAK_LOGIN_REALM="rhdh"
+  export KEYCLOAK_METADATA_URL="${KEYCLOAK_URL}/realms/rhdh"
+  export KEYCLOAK_BASE_URL="${KEYCLOAK_URL}"
+
+  oc patch secret rhdh-secrets -n "${NAMESPACE}" \
+    --type=merge -p "{\"stringData\":{
+      \"KEYCLOAK_BASE_URL\":\"${KEYCLOAK_URL}\",
+      \"KEYCLOAK_METADATA_URL\":\"${KEYCLOAK_URL}/realms/rhdh\",
+      \"KEYCLOAK_CLIENT_ID\":\"${client_id}\",
+      \"KEYCLOAK_CLIENT_SECRET\":\"${client_secret}\",
+      \"KEYCLOAK_REALM\":\"rhdh\",
+      \"KEYCLOAK_LOGIN_REALM\":\"rhdh\"}}"
+
+  export IS_AUTH_ENABLED=true
+
+  _append_plugin_dynamic_config "${PWD}/resources/keycloak/dynamic-plugins.yaml" "Keycloak"
+
+  echo "Keycloak plugin secrets and overlay configured for ${NAMESPACE}!"
+}
+
+# =============================================================================
+# Step 5: Apply backstage.io/kubernetes-id labels on Keycloak resources
 # =============================================================================
 apply_keycloak_labels() {
-  echo "Applying Kubernetes labels for Keycloak resources..."
+  echo "Applying Kubernetes labels for Keycloak resources in ${KEYCLOAK_NS}..."
 
   declare -A patterns=(
     ["keycloak"]="backstage.io/kubernetes-id=keycloak"
@@ -444,11 +501,11 @@ apply_keycloak_labels() {
   for resource in "${resource_types[@]}"; do
     for pattern in "${!patterns[@]}"; do
       local label="${patterns[$pattern]}"
-      oc get "$resource" -n "${NAMESPACE}" --no-headers \
+      oc get "$resource" -n "${KEYCLOAK_NS}" --no-headers \
         -o custom-columns=":metadata.name" 2>/dev/null \
         | grep "$pattern" \
         | xargs -I {} oc label "$resource" {} "$label" --overwrite \
-            -n "${NAMESPACE}" 2>/dev/null || true
+            -n "${KEYCLOAK_NS}" 2>/dev/null || true
     done
   done
 
@@ -456,21 +513,50 @@ apply_keycloak_labels() {
 }
 
 # =============================================================================
-# Teardown
+# Teardown: per-instance (remove OIDC client only, keep shared Keycloak)
 # =============================================================================
 uninstall_keycloak() {
-  echo "Uninstalling Keycloak..."
+  echo "Removing per-instance Keycloak client for namespace ${NAMESPACE}..."
 
-  helm uninstall "${_KEYCLOAK_RELEASE_NAME}" --namespace "${NAMESPACE}" 2>/dev/null || true
-  oc delete route "${_KEYCLOAK_RELEASE_NAME}" --namespace "${NAMESPACE}" 2>/dev/null || true
-  oc delete secret keycloak-credentials --namespace "${NAMESPACE}" 2>/dev/null || true
-  oc delete secret keycloak-test-credentials --namespace "${NAMESPACE}" 2>/dev/null || true
-  # StatefulSet PVCs are not deleted by Helm uninstall — remove explicitly so
-  # a subsequent deploy does not conflict with the leftover volume.
+  local client_id="rhdh-client-${NAMESPACE}"
+
+  # Best-effort: get admin token and delete the client via API.
+  if _keycloak_ensure_ready 2>/dev/null; then
+    local client_uuid
+    client_uuid=$(_keycloak_api_call GET \
+      "${KEYCLOAK_URL}/admin/realms/rhdh/clients?clientId=${client_id}" \
+      "" "Get client UUID" | jq -r '.[0].id // empty')
+
+    if [[ -n "$client_uuid" ]]; then
+      _keycloak_api_call DELETE \
+        "${KEYCLOAK_URL}/admin/realms/rhdh/clients/${client_uuid}" \
+        "" "Delete client '${client_id}'" >/dev/null \
+        && echo "  Deleted OIDC client: ${client_id}" \
+        || echo "  Warning: Failed to delete OIDC client: ${client_id}"
+    else
+      echo "  Client '${client_id}' not found in Keycloak — nothing to delete."
+    fi
+  else
+    echo "  Warning: Could not reach Keycloak — skipping client deletion."
+  fi
+
+  echo "Per-instance Keycloak teardown complete for ${NAMESPACE}."
+}
+
+# =============================================================================
+# Teardown: full shared Keycloak infra (use only when ALL instances are gone)
+# =============================================================================
+uninstall_keycloak_infra() {
+  echo "Uninstalling shared Keycloak infrastructure from ${KEYCLOAK_NS}..."
+
+  helm uninstall "${_KEYCLOAK_RELEASE_NAME}" --namespace "${KEYCLOAK_NS}" 2>/dev/null || true
+  oc delete route "${_KEYCLOAK_RELEASE_NAME}" --namespace "${KEYCLOAK_NS}" 2>/dev/null || true
+  oc delete secret keycloak-credentials --namespace "${KEYCLOAK_NS}" 2>/dev/null || true
+  oc delete secret keycloak-test-credentials --namespace "${KEYCLOAK_NS}" 2>/dev/null || true
   oc delete pvc "data-${_KEYCLOAK_RELEASE_NAME}-postgresql-0" \
-    --namespace "${NAMESPACE}" 2>/dev/null || true
+    --namespace "${KEYCLOAK_NS}" 2>/dev/null || true
 
-  echo "Keycloak uninstalled!"
+  echo "Shared Keycloak uninstalled from ${KEYCLOAK_NS}!"
 }
 
 # =============================================================================
@@ -485,19 +571,23 @@ main() {
 
   echo "=============================================="
   echo "Configuring Keycloak Plugin"
+  echo "  Shared Keycloak NS:  ${KEYCLOAK_NS}"
+  echo "  RHDH instance NS:   ${NAMESPACE}"
   echo "=============================================="
 
   deploy_keycloak
-  config_secrets_for_keycloak_plugins
   create_users_and_groups_keycloak
+  register_keycloak_client
+  config_secrets_for_keycloak_plugins
   apply_keycloak_labels
 
   echo ""
   echo "=============================================="
-  echo "URL:        ${KEYCLOAK_URL}"
-  echo "Admin:      admin"
-  echo "Realm:      rhdh"
-  echo "User pass:  (stored in secret keycloak-test-credentials)"
+  echo "Keycloak URL:   ${KEYCLOAK_URL}"
+  echo "Admin:          admin"
+  echo "Realm:          rhdh"
+  echo "Client ID:      rhdh-client-${NAMESPACE}"
+  echo "User pass:      (stored in secret keycloak-test-credentials in ${KEYCLOAK_NS})"
   echo "Keycloak configuration complete!"
   echo "=============================================="
 

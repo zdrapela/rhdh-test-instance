@@ -1,5 +1,6 @@
 app:
   baseUrl: '${RHDH_BASE_URL}'
+
 backend:
   baseUrl: '${RHDH_BASE_URL}'
   cors:
@@ -13,14 +14,34 @@ backend:
       - "'self'"
       - 'data:'
 
+i18n:
+  locales:
+    - en
+    - de
+    - es
+    - fr
+    - it
+    - ja
+  defaultLocale: en
+
+permission:
+  enabled: true
+  rbac:
+    admin:
+      superUsers:
+        - name: user:default/test1
+    defaultPolicy: allow
+
 auth:
-  # see https://backstage.io/docs/auth/ to learn about auth providers
+  environment: production
   session:
     secret: '${SESSION_SECRET}'
+
+signInPage: oidc
+
 catalog:
   import:
     entityFilename: catalog-info.yaml
-    # pullRequestBranchName: rhdh-integration
     pullRequestBranchName: backstage-integration
   rules:
     - allow: [API, Component, User, Group, Location, Resource, System, Template]

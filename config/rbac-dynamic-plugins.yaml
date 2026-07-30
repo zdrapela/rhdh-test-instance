@@ -1,0 +1,7 @@
+# RBAC frontend
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-rbac:bs_1.52.0__1.55.2
+  disabled: false
+
+# RBAC backend (uses chart-bundled version)
+- package: ./dynamic-plugins/dist/backstage-community-plugin-rbac-backend
+  disabled: false
