@@ -211,7 +211,11 @@ This section guides users through deploying an RHDH test instance via the GitHub
 | `config/app-config-rhdh.yaml` | RHDH app config (auth, catalog, providers, backend plugin config). Applied as a ConfigMap. |
 | `config/dynamic-plugins.yaml` | Plugin enablement — lists packages to load and their configuration. Includes `dynamic-plugins.default.yaml` for defaults. |
 | `config/rhdh-secrets.yaml` | Kubernetes Secret template with env vars. Variables substituted at deploy time. |
-| `config/orchestrator-dynamic-plugins.yaml` | Orchestrator plugins, auto-merged when `ORCH=true`. Do not manually merge. |
+| `config/orchestrator-dynamic-plugins.yaml` | Orchestrator plugins, auto-merged when `WITH=orchestrator`. Do not manually merge. |
+| `config/lightspeed-dynamic-plugins.yaml` | Lightspeed plugins, auto-merged when `WITH=lightspeed`. Do not manually merge. |
+| `config/scorecard-dynamic-plugins.yaml` | Scorecard plugins, auto-merged when `WITH=scorecard`. Do not manually merge. |
+| `config/nfs-dynamic-plugins.yaml` | NFS-compatible GHCR plugins, auto-merged when `WITH=nfs`. Do not manually merge. |
+| `config/rbac-dynamic-plugins.yaml` | RBAC plugins, auto-merged when `WITH=rbac`. Do not manually merge. |
 | `helm/value_file.yaml` | Helm chart value overrides (resource limits, replicas, etc.) |
 | `operator/subscription.yaml` | Backstage CR for operator deployments |
 

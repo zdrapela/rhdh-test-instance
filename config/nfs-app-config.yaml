@@ -10,7 +10,7 @@ app:
           defaultLanguage: "en"
     # - app-root-element:app/quickstart-init
     # - translation:app/quickstart-translations
-    
+
     - api:home/visits: true
     - app-root-element:home/visit-listener: true
     - gh-component:global-header/search:
@@ -62,15 +62,15 @@ app:
         variant: rhdh
         palette:
           primary:
-            main: '#0066CC'
+            main: "#0066CC"
           rhdh:
             general:
-              appBarBackgroundColor: '#0A1628'
+              appBarBackgroundColor: "#0A1628"
       dark:
         variant: rhdh
         palette:
           primary:
-            main: '#73BCF7'
+            main: "#73BCF7"
 
 globalHeader:
   components:

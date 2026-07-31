@@ -8,6 +8,8 @@
 upstream:
   backstage:
     # extraAppConfig is built dynamically by helm/deploy.sh based on enabled components
+    podLabels:
+      backstage.io/kubernetes-id: developer-hub
     extraEnvVarsSecrets:
       - rhdh-secrets
     extraEnvVars: # need to look to see if these are required or not ...
@@ -85,12 +87,13 @@ upstream:
         projected:
           sources:
             - configMap:
-                name: users-config-map
-            - configMap:
-                name: operators-config-map
-            - configMap:
                 name: plugins-config-map
             - configMap:
+                name: operators-config-map
+                optional: true
+            - configMap:
                 name: components-config-map
+                optional: true
             - configMap:
                 name: resources-config-map
+                optional: true

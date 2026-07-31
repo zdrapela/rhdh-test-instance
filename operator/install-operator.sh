@@ -61,7 +61,6 @@ if [[ "$(uname)" == "Darwin" ]]; then
     echo "Patching install script for macOS sed compatibility..."
     sed -i '' "s/sed -i 's/sed -i '' 's/g" install-rhdh-catalog-source.sh
     sed -i '' 's/sed -i "s/sed -i "" "s/g' install-rhdh-catalog-source.sh
-    sed -i '' 's/sed -i -f/sed -i "" -f/g' install-rhdh-catalog-source.sh
 fi
 
 # Fix hardcoded 'kubeadmin' username — on ARO clusters the admin user is
@@ -77,7 +76,7 @@ fi
 
 # Override the hardcoded namespace so the operator lives in a dedicated namespace
 # that won't be deleted when RHDH deployment namespaces are removed.
-`if [[ "$(uname)" == "Darwin" ]]; then
+if [[ "$(uname)" == "Darwin" ]]; then
     sed -i '' "s/NAMESPACE_SUBSCRIPTION=\"rhdh-operator\"/NAMESPACE_SUBSCRIPTION=\"${OPERATOR_NAMESPACE}\"/" install-rhdh-catalog-source.sh
 else
     sed -i "s/NAMESPACE_SUBSCRIPTION=\"rhdh-operator\"/NAMESPACE_SUBSCRIPTION=\"${OPERATOR_NAMESPACE}\"/" install-rhdh-catalog-source.sh

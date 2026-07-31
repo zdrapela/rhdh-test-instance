@@ -1,5 +1,6 @@
 .env
 install-rhdh-catalog-source.sh
+install-rhdh-catalog-source.sh-e
 plugin-infra.sh
 .DS_Store
 .claude/

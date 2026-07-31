@@ -136,8 +136,18 @@ setup_resources
 
 export IS_AUTH_ENABLED="${IS_AUTH_ENABLED:-false}"
 
+# ── Shared Keycloak (always) ──────────────────────────────────────────────────
+# Keycloak OIDC is core auth, not an optional plugin. Call its setup functions
+# directly instead of going through the PLUGINS infrastructure system.
 source scripts/config-plugins.sh
-PLUGINS="${PLUGINS:+${PLUGINS},}keycloak"
+
+deploy_keycloak
+create_users_and_groups_keycloak
+register_keycloak_client
+config_secrets_for_keycloak_plugins
+apply_keycloak_labels
+
+# Optional infrastructure plugins (lighthouse, etc.) — only if explicitly requested
 if [[ -n "${PLUGINS:-}" ]]; then
     main "$PLUGINS"
 fi

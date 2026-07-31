@@ -42,12 +42,22 @@
 - package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-analytics-module-adoption-insights:bs_1.52.0__0.9.0
   disabled: false
 
+# Kubernetes (disable catalog index, enable GHCR)
+- package: ./dynamic-plugins/dist/backstage-plugin-kubernetes
+  disabled: true
+- package: ./dynamic-plugins/dist/backstage-plugin-kubernetes-backend-dynamic
+  disabled: true
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-kubernetes:bs_1.52.0__0.12.20
+  disabled: false
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-kubernetes-backend:bs_1.52.0__0.21.5
+  disabled: false
+
 # Tekton
 - package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-tekton:bs_1.52.0__3.40.0
   disabled: false
 
 # Topology
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-topology:bs_1.52.0__2.15.0
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-topology:bs_1.52.0__2.16.0
   disabled: false
 
 # Theme (NFS-compatible RHDH theme)

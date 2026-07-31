@@ -99,6 +99,7 @@ fi
 # Build extraAppConfig array dynamically based on enabled components
 EXTRA_APP_CONFIGS='[{"configMapRef":"app-config-rhdh","filename":"app-config-rhdh.yaml"}'
 [[ "${WITH_NFS}" == "1" ]] && EXTRA_APP_CONFIGS+=',{"configMapRef":"app-config-nfs","filename":"nfs-app-config.yaml"}'
+[[ "${WITH_ORCHESTRATOR}" == "1" ]] && EXTRA_APP_CONFIGS+=',{"configMapRef":"app-config-orchestrator","filename":"orchestrator-app-config.yaml"}'
 EXTRA_APP_CONFIGS+=']'
 
 # Build helm install arguments
@@ -137,6 +138,10 @@ upstream:
           secretKeyRef:
             key: postgres-password
             name: '{{- include "rhdh.postgresql.secretName" . }}'
+      - name: NODE_TLS_REJECT_UNAUTHORIZED
+        value: '0'
+      - name: SEGMENT_TEST_MODE
+        value: 'true'
       - name: BACKSTAGE_LOG_LEVEL
         value: debug
       - name: APP_CONFIG_app_packageName

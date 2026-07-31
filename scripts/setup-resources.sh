@@ -98,8 +98,8 @@ apply_catalog_entities() {
     fi
   done
 
-  # Conditional: components.yaml (Lighthouse/Keycloak demos) — only if lighthouse or keycloak plugins
-  if [[ "${PLUGINS:-}" == *"lighthouse"* ]] || [[ "${PLUGINS:-}" == *"keycloak"* ]]; then
+  # Conditional: components.yaml, resources.yaml — only if lighthouse plugin is explicitly enabled
+  if [[ "${PLUGINS:-}" == *"lighthouse"* ]]; then
     for f in components.yaml resources.yaml; do
       if [[ -f "${catalog_dir}/${f}" ]]; then
         echo "  Applying: ${f}"
@@ -107,7 +107,7 @@ apply_catalog_entities() {
       fi
     done
   else
-    echo "  Skipping: components.yaml, resources.yaml (no lighthouse/keycloak plugins)"
+    echo "  Skipping: components.yaml, resources.yaml (lighthouse plugin not enabled)"
   fi
 
   # Conditional: operators.yaml — only if orchestrator is enabled
@@ -146,6 +146,17 @@ apply_rhdh_configmaps() {
     --from-file="${ROOT_DIR}/config/dynamic-plugins.yaml" \
     --namespace="${NAMESPACE}" \
     --dry-run=client -o yaml | oc replace --force -f - --namespace="${NAMESPACE}"
+
+  # Orchestrator app-config (dataIndexService URL) — only when orchestrator is enabled
+  if [[ "${WITH_ORCHESTRATOR:-0}" == "1" ]]; then
+    echo "Applying orchestrator app-config ConfigMap..."
+    local orch_config="${ROOT_DIR}/config/orchestrator-app-config.yaml"
+    envsubst '${NAMESPACE}' < "${orch_config}" | \
+      oc create configmap app-config-orchestrator \
+        --from-file=orchestrator-app-config.yaml=/dev/stdin \
+        --namespace="${NAMESPACE}" \
+        --dry-run=client -o yaml | oc apply -f - --namespace="${NAMESPACE}"
+  fi
 
   echo "RHDH ConfigMaps applied!"
 }
@@ -234,6 +245,30 @@ apply_demo_resources() {
 }
 
 # =============================================================================
+# Kubernetes Plugin RBAC
+#
+# Grant the RHDH service account read access to cluster resources so the
+# Kubernetes and Topology plugins can query pods, deployments, services, etc.
+# Uses a ClusterRoleBinding so the plugin can read across namespaces.
+# =============================================================================
+apply_kubernetes_rbac() {
+  echo ""
+  echo "Applying Kubernetes plugin RBAC..."
+
+  local binding_name="rhdh-kubernetes-plugin-${NAMESPACE}"
+  if oc get clusterrolebinding "${binding_name}" &>/dev/null; then
+    echo "  ClusterRoleBinding ${binding_name} already exists — skipping."
+  else
+    oc create clusterrolebinding "${binding_name}" \
+      --clusterrole=view \
+      --serviceaccount="${NAMESPACE}:default"
+    echo "  Created ClusterRoleBinding: ${binding_name}"
+  fi
+
+  echo "Kubernetes plugin RBAC applied!"
+}
+
+# =============================================================================
 # Teardown
 #
 # Removes all resources created by setup_resources. Called during cleanup.
@@ -250,7 +285,7 @@ teardown_resources() {
   oc delete secret rhdh-secrets --namespace="${NAMESPACE}" 2>/dev/null || true
 
   echo "Removing RHDH ConfigMaps..."
-  oc delete configmap app-config-rhdh app-config-nfs dynamic-plugins \
+  oc delete configmap app-config-rhdh app-config-nfs app-config-orchestrator dynamic-plugins \
     --namespace="${NAMESPACE}" 2>/dev/null || true
 
   echo "Removing catalog entity ConfigMaps..."
@@ -262,6 +297,9 @@ teardown_resources() {
   oc delete -f "${ROOT_DIR}/config/rbac-policies.yaml" \
     --namespace="${NAMESPACE}" 2>/dev/null || true
 
+
+  echo "Removing Kubernetes plugin RBAC..."
+  oc delete clusterrolebinding "rhdh-kubernetes-plugin-${NAMESPACE}" 2>/dev/null || true
 
   echo "Removing demo resources..."
   local examples_dir="${ROOT_DIR}/resources/rhdh-script-examples"
@@ -292,6 +330,7 @@ setup_resources() {
   apply_rbac_policies
   apply_image_stream_imports
   apply_demo_resources
+  apply_kubernetes_rbac
 
   echo ""
   echo "=============================================="

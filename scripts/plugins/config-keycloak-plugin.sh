@@ -246,6 +246,11 @@ spec:
   wildcardPolicy: None
 EOF
 
+  # Set KC_HOSTNAME to the HTTPS route URL so login forms use secure URLs
+  echo "Setting KC_HOSTNAME to https://${KEYCLOAK_HOSTNAME}..."
+  oc set env statefulset/"${_KEYCLOAK_RELEASE_NAME}" -n "${KEYCLOAK_NS}" \
+    KC_HOSTNAME="https://${KEYCLOAK_HOSTNAME}"
+
   echo "Keycloak deployment applied in ${KEYCLOAK_NS}!"
 }
 
@@ -262,8 +267,9 @@ create_users_and_groups_keycloak() {
 
   echo "Creating Keycloak groups and users..."
 
-  export USER_PASSWORD
-  USER_PASSWORD=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)
+  # Fallback password for users that don't specify credentials in users.json.
+  # Default test users have passwords baked in (e.g. test1@123, test2@123).
+  local USER_PASSWORD_FALLBACK="changeme"
 
   # Refresh token before the potentially long user-creation loop.
   _keycloak_refresh_admin_token
@@ -288,11 +294,17 @@ create_users_and_groups_keycloak() {
       return 0
     }
     echo "Creating users..."
-    jq -c '.[]' "${_KEYCLOAK_USERS_FILE}" | while read -r user_json; do
+    local _user_count=0
+    while read -r user_json; do
+      # Refresh token every 10 users to avoid 60s token expiry
+      if (( _user_count > 0 && _user_count % 10 == 0 )); then
+        _keycloak_refresh_admin_token
+      fi
+      (( _user_count++ )) || true
       local username user_payload groups user_id
       username=$(echo "$user_json" | jq -r '.username')
       groups=$(echo "$user_json" | jq -r '.groups // [] | join(",")')
-      user_payload=$(echo "$user_json" | jq -c --arg pw "${USER_PASSWORD}" \
+      user_payload=$(echo "$user_json" | jq -c --arg pw "${USER_PASSWORD_FALLBACK}" \
         'del(.groups) | if .credentials then . else .credentials = [{"type":"password","value":$pw,"temporary":false}] end')
 
       if ! _keycloak_api_call POST "${KEYCLOAK_URL}/admin/realms/rhdh/users" \
@@ -324,7 +336,7 @@ create_users_and_groups_keycloak() {
             || echo "    Warning: Failed to add ${username} to group: ${group}"
         done
       fi
-    done
+    done < <(jq -c '.[]' "${_KEYCLOAK_USERS_FILE}")
   fi
 
   echo "Users and groups created!"
@@ -335,13 +347,12 @@ create_users_and_groups_keycloak() {
   oc create secret generic keycloak-test-credentials \
     --from-literal=KEYCLOAK_URL="${KEYCLOAK_URL}" \
     --from-literal=KEYCLOAK_USERNAMES="${usernames}" \
-    --from-literal=KEYCLOAK_USER_PASSWORD="${USER_PASSWORD}" \
     --namespace="${KEYCLOAK_NS}" \
     --dry-run=client -o yaml | oc apply -f -
 
   echo ""
   echo "  Keycloak test users:  ${usernames}"
-  echo "  Shared password:      (stored in secret keycloak-test-credentials in ${KEYCLOAK_NS})"
+  echo "  Passwords:            <username>@123  (e.g. test1@123, test2@123)"
   echo "  Admin credentials:    see secret keycloak-credentials in ${KEYCLOAK_NS}"
   echo ""
 }
@@ -351,6 +362,7 @@ create_users_and_groups_keycloak() {
 # =============================================================================
 register_keycloak_client() {
   _keycloak_ensure_ready
+  _keycloak_refresh_admin_token
 
   if [[ ! -f "${_KEYCLOAK_CLIENT_FILE}" ]]; then
     echo "Error: Client file not found: ${_KEYCLOAK_CLIENT_FILE}"

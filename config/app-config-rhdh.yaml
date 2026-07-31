@@ -39,6 +39,18 @@ auth:
 
 signInPage: oidc
 
+kubernetes:
+  serviceLocatorMethod:
+    type: multiTenant
+  clusterLocatorMethods:
+    - type: config
+      clusters:
+        - url: https://kubernetes.default.svc
+          name: local-cluster
+          authProvider: serviceAccount
+          skipTLSVerify: true
+          skipMetricsLookup: true
+
 catalog:
   import:
     entityFilename: catalog-info.yaml
@@ -60,3 +72,5 @@ catalog:
       target: ./catalog-entities/resources.yaml
     - type: file
       target: ./catalog-entities/plugins.yaml
+    - type: file
+      target: ./catalog-entities/topology-test.yaml
