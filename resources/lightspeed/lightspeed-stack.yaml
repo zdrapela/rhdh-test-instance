@@ -32,3 +32,8 @@ data:
         url: 'http://localhost:7007/api/mcp-actions/v1'
         authorization_headers:
           Authorization: 'client'
+      - name: rhdh-mcp
+        provider_id: 'model-context-protocol'
+        url: 'https://rhdh-mcp-proxy-apicast-production.apps.rosa.redhat-ai-dev.m6no.p3.openshiftapps.com:443'
+        authorization_headers:
+          user_key: 'd3781a1bb9e101e1235e78d66c3e4364'

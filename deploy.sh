@@ -17,17 +17,19 @@ AVAILABLE_COMPONENTS="nfs, lightspeed, scorecard, orchestrator, rbac (or 'all')"
 
 # Parse arguments
 if [[ $# -lt 2 ]]; then
-    echo "Usage: $0 <installation-method> <version> [--namespace <ns>] [--with <components>] [--plugins <list>]"
+    echo "Usage: $0 <installation-method> <version> [--namespace <ns>] [--with <components>] [--without <components>] [--plugins <list>]"
     echo "Installation methods: helm, operator"
     echo "Options:"
     echo "  --namespace <ns>         Deploy to specified namespace (default: rhdh)"
     echo "  --with <components>      Comma-separated list of optional components to enable"
     echo "                           Available: ${AVAILABLE_COMPONENTS}"
+    echo "  --without <components>   Comma-separated list of components to exclude (use with --with all)"
     echo "  --plugins <list>         Infrastructure plugins (default: keycloak is always included)"
     echo "Examples:"
     echo "  $0 helm next"
     echo "  $0 helm next --with nfs,lightspeed"
     echo "  $0 helm next --with all"
+    echo "  $0 helm next --with all --without orchestrator,lightspeed"
     echo "  $0 helm next --namespace my-test --with nfs,scorecard"
     echo "  $0 operator 1.9 --with orchestrator"
     exit 1
@@ -53,6 +55,19 @@ _enable_component() {
     esac
 }
 
+_disable_component() {
+    case "$1" in
+        nfs)           WITH_NFS=0 ;;
+        lightspeed)    WITH_LIGHTSPEED=0 ;;
+        scorecard)     WITH_SCORECARD=0 ;;
+        orchestrator)  WITH_ORCHESTRATOR=0 ;;
+        rbac)          WITH_RBAC=0 ;;
+        *)
+            echo "Warning: Unknown component '$1'. Available: ${AVAILABLE_COMPONENTS}"
+            ;;
+    esac
+}
+
 # Parse optional flags
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -67,13 +82,20 @@ while [[ $# -gt 0 ]]; do
             done
             shift 2
             ;;
+        --without)
+            IFS=',' read -ra _components <<< "$2"
+            for _comp in "${_components[@]}"; do
+                _disable_component "$_comp"
+            done
+            shift 2
+            ;;
         --plugins)
             PLUGINS="$2"
             shift 2
             ;;
         *)
             echo "Error: Unknown option: $1"
-            echo "Usage: $0 <installation-method> <version> [--namespace <ns>] [--with <components>] [--plugins <list>]"
+            echo "Usage: $0 <installation-method> <version> [--namespace <ns>] [--with <components>] [--without <components>] [--plugins <list>]"
             exit 1
             ;;
     esac

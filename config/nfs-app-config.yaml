@@ -1,15 +1,29 @@
 app:
   packages: all
   extensions:
+    # Lightspeed extensions (uncomment when lightspeed is enabled)
     # - app-root-wrapper:app/drawer
     # - app-root-wrapper:app/lightspeed-fab
     # - translation:app/lightspeed-translations
+
+    # Quickstart extensions (uncomment to enable quickstart init)
+    # - app-root-element:app/quickstart-init
+    # - translation:app/quickstart-translations
+
+    # Translation workarounds for plugins
+    - translation:global-header/global-header-translations: true
+    - translation:home/homepage-translations: true
+    - translation:adoption-insights/adoption-insights-translations: true
+    - translation:bulk-import/bulk-import-translations: true
+    - translation:scorecard/scorecard-translations: true
+    - translation:rbac/rbac-translations: true
+    - translation:extensions/extensions-translations: true
+    - translation:techdocs/techdocs-translations: true
+
     - api:app/app-language:
         config:
           availableLanguages: ["en", "de", "fr", "it", "es", "ja"]
           defaultLanguage: "en"
-    # - app-root-element:app/quickstart-init
-    # - translation:app/quickstart-translations
 
     - api:home/visits: true
     - app-root-element:home/visit-listener: true

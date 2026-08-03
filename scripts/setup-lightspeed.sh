@@ -99,6 +99,13 @@ patch_lightspeed_sidecar() {
 
     echo "Patching deployment ${deployment_name} with lightspeed-core sidecar..."
 
+    # Scale down first to avoid two pods competing for the same database
+    # (the patch changes the pod template, triggering a new ReplicaSet)
+    echo "Scaling down ${deployment_name} before patch..."
+    oc scale deployment "${deployment_name}" -n "${NAMESPACE}" --replicas=0
+    oc wait --for=delete pod -l "app.kubernetes.io/instance in (redhat-developer-hub,developer-hub),app.kubernetes.io/name!=postgresql" \
+        -n "${NAMESPACE}" --timeout=120s 2>/dev/null || true
+
     local patch_json
     patch_json=$(cat <<PATCH
 [
@@ -149,4 +156,9 @@ PATCH
     oc patch deployment "${deployment_name}" -n "${NAMESPACE}" --type='json' -p "${patch_json}"
 
     echo "LCS sidecar patched into ${deployment_name}."
+
+    # Scale back up and wait for the single pod to become ready
+    echo "Scaling up ${deployment_name}..."
+    oc scale deployment "${deployment_name}" -n "${NAMESPACE}" --replicas=1
+    oc rollout status deployment "${deployment_name}" -n "${NAMESPACE}" --timeout=300s
 }

@@ -45,9 +45,11 @@ make deploy-helm WITH=nfs,lightspeed
 make deploy-helm WITH=nfs,lightspeed,scorecard,rbac
 make deploy-helm WITH=orchestrator
 make deploy-helm WITH=all
+make deploy-helm WITH=all WITHOUT=orchestrator,lightspeed
 
 # Helm with specific version + namespace + components
 make deploy-helm VERSION=1.11 NAMESPACE=team-a WITH=nfs,lightspeed,scorecard,rbac
+make deploy-helm VERSION=next WITH=all WITHOUT=orchestrator
 
 # Helm with PR image
 make deploy-helm RHDH_IMAGE=quay.io/rhdh-community/rhdh:pr-1234 WITH=nfs
@@ -89,6 +91,7 @@ make url       # Print the RHDH portal URL
 | `NAMESPACE` | `rhdh` | OpenShift namespace for RHDH |
 | `VERSION` | `next` | RHDH version (supports `1.11`, `1.9-190-CI`, `next`) |
 | `WITH` | (empty) | Comma-separated optional components: `nfs`, `lightspeed`, `scorecard`, `orchestrator`, `rbac`, or `all` |
+| `WITHOUT` | (empty) | Comma-separated components to exclude (use with `WITH=all` to skip specific ones) |
 | `RHDH_IMAGE` | (empty) | Override RHDH container image (e.g., `quay.io/rhdh-community/rhdh:pr-1234`) |
 | `KEYCLOAK_NS` | `rhdh-keycloak` | Namespace for shared Keycloak (all RHDH instances share one Keycloak) |
 | `PLUGINS` | (empty) | Infrastructure plugins to deploy/teardown (keycloak is always auto-included) |
@@ -98,7 +101,7 @@ make url       # Print the RHDH portal URL
 
 ```
 deploy.sh (entry point)
-├── Parses args: method (helm/operator), version, namespace, --with <components>
+├── Parses args: method (helm/operator), version, namespace, --with <components>, --without <components>
 ├── Sources secrets from .env (local) or Vault (CI)
 ├── Deploys shared Keycloak via scripts/plugins/config-keycloak-plugin.sh (into KEYCLOAK_NS)
 │   └── Auto-fixes KC_HOSTNAME if cluster has changed (pool rotation)
@@ -135,12 +138,13 @@ deploy.sh (entry point)
 4. `config/app-config-rhdh.yaml` configures RHDH with OIDC auth pointing to the shared Keycloak and catalog entity locations from GitHub.
 5. For Helm: the RHDH chart is installed with dynamic plugins config. For Operator: a Backstage CR is applied referencing the ConfigMaps.
 6. Optional components are enabled via `--with <components>` (comma-separated):
-   - `nfs` — NFS GHCR plugins merged from `config/nfs-dynamic-plugins.yaml`, `app-next` package enabled, `nfs-app-config.yaml` applied as extra ConfigMap
+   - `nfs` — NFS GHCR plugins merged from `config/nfs-dynamic-plugins.yaml` (global header, homepage, theme, extensions, bulk import, TechDocs, Kubernetes, Tekton, Topology, ACR, Nexus, etc.), `app-next` package enabled, `nfs-app-config.yaml` applied as extra ConfigMap
    - `orchestrator` — orchestrator plugins merged from `config/orchestrator-dynamic-plugins.yaml`, serverless operators installed
    - `lightspeed` — intelligent-assistant plugins merged from `config/lightspeed-dynamic-plugins.yaml`. If LLM provider credentials exist (e.g., `ENABLE_OPENAI=true`), LCS sidecar is deployed; otherwise UI loads but shows "Could not load models"
    - `scorecard` — scorecard plugins merged from `config/scorecard-dynamic-plugins.yaml`
    - `rbac` — RBAC permission framework plugin from `config/rbac-dynamic-plugins.yaml`
    - `all` — enables all of the above
+7. `--without <components>` can be used with `--with all` to exclude specific components (e.g., `--with all --without orchestrator,lightspeed`).
 
 ### Secrets
 

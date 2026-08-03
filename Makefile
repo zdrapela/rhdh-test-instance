@@ -1,6 +1,7 @@
 NAMESPACE ?= rhdh
 VERSION ?= next
 WITH ?=
+WITHOUT ?=
 PLUGINS ?=
 USE_CONTAINER ?= false
 CATALOG_INDEX_TAG ?=
@@ -15,12 +16,16 @@ export OPERATOR_NAMESPACE
 export KEYCLOAK_NS
 
 # Build deploy flags
-# WITH=<components>  Comma-separated list of optional components to enable
-#   Available: nfs, lightspeed, scorecard, orchestrator (or "all")
-# PLUGINS=<infra>    Comma-separated infrastructure plugins (keycloak is always auto-included)
+# WITH=<components>     Comma-separated list of optional components to enable
+#   Available: nfs, lightspeed, scorecard, orchestrator, rbac (or "all")
+# WITHOUT=<components>  Comma-separated list of components to exclude (use with WITH=all)
+# PLUGINS=<infra>       Comma-separated infrastructure plugins (keycloak is always auto-included)
 DEPLOY_FLAGS = --namespace $(NAMESPACE)
 ifneq ($(WITH),)
 DEPLOY_FLAGS += --with $(WITH)
+endif
+ifneq ($(WITHOUT),)
+DEPLOY_FLAGS += --without $(WITHOUT)
 endif
 ifneq ($(PLUGINS),)
 DEPLOY_FLAGS += --plugins $(PLUGINS)
@@ -47,7 +52,7 @@ undeploy-keycloak: ## Remove the shared Keycloak infra from KEYCLOAK_NS (only af
 
 .PHONY: deploy-helm install-operator deploy-operator
 
-deploy-helm: ## Deploy RHDH via Helm (WITH=nfs,lightspeed,scorecard,orchestrator or all)
+deploy-helm: ## Deploy RHDH via Helm (WITH=all WITHOUT=orchestrator,lightspeed)
 ifeq ($(USE_CONTAINER),true)
 	$(MAKE) run-in-runner CMD="./deploy.sh helm $(VERSION) $(DEPLOY_FLAGS)"
 else
@@ -61,7 +66,7 @@ else
 	bash operator/install-operator.sh $(VERSION)
 endif
 
-deploy-operator: ## Deploy RHDH instance via Operator (WITH=nfs,lightspeed,scorecard,orchestrator or all)
+deploy-operator: ## Deploy RHDH instance via Operator (WITH=all WITHOUT=orchestrator)
 ifeq ($(USE_CONTAINER),true)
 	$(MAKE) run-in-runner CMD="./deploy.sh operator $(VERSION) $(DEPLOY_FLAGS)"
 else

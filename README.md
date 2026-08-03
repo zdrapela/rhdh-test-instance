@@ -129,6 +129,7 @@ For local development and testing environments, you can deploy RHDH directly to 
    make deploy-helm WITH=nfs                       # With New Frontend System
    make deploy-helm WITH=nfs,lightspeed            # With NFS + Lightspeed AI assistant
    make deploy-helm WITH=all                       # Everything enabled
+   make deploy-helm WITH=all WITHOUT=orchestrator  # Everything except orchestrator
    ```
 
 4. **Access your RHDH instance:**
@@ -154,10 +155,12 @@ make deploy-helm WITH=nfs,lightspeed
 make deploy-helm WITH=nfs,lightspeed,scorecard,rbac
 make deploy-helm WITH=orchestrator
 make deploy-helm WITH=all
+make deploy-helm WITH=all WITHOUT=orchestrator,lightspeed
 
 # With a specific version and components
 make deploy-helm VERSION=1.11 WITH=nfs,lightspeed
 make deploy-helm VERSION=1.11 NAMESPACE=team-a WITH=nfs,lightspeed,scorecard,rbac
+make deploy-helm VERSION=next WITH=all WITHOUT=orchestrator
 
 # With a custom RHDH image
 make deploy-helm RHDH_IMAGE=quay.io/rhdh-community/rhdh:pr-1234 WITH=nfs
@@ -217,6 +220,7 @@ All make commands accept these variables:
 | `NAMESPACE`         | `rhdh`                                        | Target namespace for RHDH                                                     |
 | `VERSION`           | `next`                                        | RHDH version (`next`, `1.11`, `1.9-190-CI`)                                  |
 | `WITH`              | _(empty)_                                     | Comma-separated optional components: `nfs`, `lightspeed`, `scorecard`, `orchestrator`, `rbac`, or `all` |
+| `WITHOUT`           | _(empty)_                                     | Comma-separated components to exclude (use with `WITH=all` to skip specific ones) |
 | `PLUGINS`           | _(empty)_                                     | Infrastructure plugins to deploy/teardown (e.g. `keycloak,lighthouse`)        |
 | `KEYCLOAK_NS`       | `rhdh-keycloak`                               | Namespace for shared Keycloak (all RHDH instances share one Keycloak)         |
 | `RHDH_IMAGE`        | _(empty)_                                     | Override RHDH container image (e.g., `quay.io/rhdh-community/rhdh:pr-1234`)  |
@@ -235,13 +239,14 @@ You can also use `deploy.sh` and `teardown.sh` directly:
 **Deploy:**
 
 ```bash
-./deploy.sh <install-method> <version> [--namespace <ns>] [--with <components>] [--plugins <list>]
+./deploy.sh <install-method> <version> [--namespace <ns>] [--with <components>] [--without <components>] [--plugins <list>]
 ```
 
 ```bash
 ./deploy.sh helm next
 ./deploy.sh helm next --with nfs,lightspeed
 ./deploy.sh helm next --with all
+./deploy.sh helm next --with all --without orchestrator,lightspeed
 ./deploy.sh helm 1.11 --namespace my-test --with nfs,scorecard
 ./deploy.sh operator 1.9 --with orchestrator
 ```
@@ -325,7 +330,7 @@ Keycloak is automatically deployed into a shared namespace (`rhdh-keycloak`) on 
 
 - **Realm**: `rhdh`
 - **Client ID**: `rhdh-client-<namespace>` (per instance)
-- **Test user password**: randomly generated at deploy time (see below)
+- **Test user password**: `<username>@123` (e.g., `test1@123`, `test2@123`)
 
 Multiple RHDH instances share the same Keycloak — deploying to different namespaces (`team-a`, `team-b`, etc.) all use the same test users and Keycloak server.
 
@@ -359,7 +364,7 @@ Navigate to **Workloads > Secrets > `keycloak-test-credentials`** in the `rhdh-k
 |---|---|
 | `KEYCLOAK_URL` | Keycloak base URL |
 | `KEYCLOAK_USERNAMES` | Comma-separated list of all test usernames (read from `users.json` at deploy time) |
-| `KEYCLOAK_USER_PASSWORD` | Shared password for all test users (generated at runtime — not hardcoded) |
+| `KEYCLOAK_USER_PASSWORD` | Password pattern for test users (`<username>@123`) |
 
 **Admin credentials** are stored by the Bitnami Helm chart in the `keycloak-credentials` Secret in the `rhdh-keycloak` namespace:
 
@@ -372,7 +377,7 @@ oc get secret keycloak-credentials -n rhdh-keycloak \
 
 ### NFS (New Frontend System)
 
-Enable with `WITH=nfs`. Replaces the traditional Scalprum-based frontend with the Backstage New Frontend System. Adds NFS-compatible plugins from GHCR (`rhdh-plugin-export-overlays`) including global header, quickstart, homepage, theme, adoption insights, Tekton, and Topology.
+Enable with `WITH=nfs`. Replaces the traditional Scalprum-based frontend with the Backstage New Frontend System. Adds NFS-compatible plugins from GHCR (`rhdh-plugin-export-overlays`) including global header, quickstart, homepage, theme, adoption insights, extensions, bulk import, TechDocs, Kubernetes, Tekton, Topology, ACR, Nexus, and more.
 
 ### Lightspeed (Intelligent Assistant)
 
@@ -398,7 +403,6 @@ Enable with `WITH=rbac`. Enables the RBAC permission framework plugin for fine-g
 rhdh-test-instance/
 ├── config/
 │   ├── app-config-rhdh.yaml                # Base RHDH configuration (auth, catalog, CORS)
-│   ├── app-config-guest-auth.yaml          # Guest auth overlay (unused when Keycloak is active)
 │   ├── nfs-app-config.yaml                 # NFS app.extensions, branding, globalHeader config
 │   ├── dynamic-plugins.yaml                # Base dynamic plugins (plugins: [])
 │   ├── nfs-dynamic-plugins.yaml            # NFS-compatible GHCR plugins
@@ -419,9 +423,8 @@ rhdh-test-instance/
 │   ├── catalog-entities/                   # Catalog entity ConfigMaps (applied unconditionally)
 │   │   ├── components.yaml                 # Demo components (Lighthouse, Keycloak, etc.)
 │   │   ├── operators.yaml                  # Operator catalog entities
-│   │   ├── plugins.yaml                    # Plugin catalog entities
-│   │   ├── resources.yaml                  # Resource catalog entities
-│   │   └── users.yaml                      # Guest user entity
+│   │   ├── plugins.yaml                    # Plugin + topology test catalog entities
+│   │   └── resources.yaml                  # Resource catalog entities
 │   ├── image-stream-imports/               # Pre-import images to avoid rate limits
 │   ├── keycloak/                           # Keycloak plugin resources and config
 │   ├── lighthouse/                         # Lighthouse plugin resources and config

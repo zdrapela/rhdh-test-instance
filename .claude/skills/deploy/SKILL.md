@@ -212,10 +212,10 @@ This section guides users through deploying an RHDH test instance via the GitHub
 | `config/dynamic-plugins.yaml` | Plugin enablement — lists packages to load and their configuration. Includes `dynamic-plugins.default.yaml` for defaults. |
 | `config/rhdh-secrets.yaml` | Kubernetes Secret template with env vars. Variables substituted at deploy time. |
 | `config/orchestrator-dynamic-plugins.yaml` | Orchestrator plugins, auto-merged when `WITH=orchestrator`. Do not manually merge. |
-| `config/lightspeed-dynamic-plugins.yaml` | Lightspeed plugins, auto-merged when `WITH=lightspeed`. Do not manually merge. |
-| `config/scorecard-dynamic-plugins.yaml` | Scorecard plugins, auto-merged when `WITH=scorecard`. Do not manually merge. |
-| `config/nfs-dynamic-plugins.yaml` | NFS-compatible GHCR plugins, auto-merged when `WITH=nfs`. Do not manually merge. |
-| `config/rbac-dynamic-plugins.yaml` | RBAC plugins, auto-merged when `WITH=rbac`. Do not manually merge. |
+| `config/lightspeed-dynamic-plugins.yaml` | Lightspeed/Intelligent Assistant plugins, auto-merged when `WITH=lightspeed`. Do not manually merge. |
+| `config/scorecard-dynamic-plugins.yaml` | Scorecard plugins (8 modules: sonarqube, github, dependabot, filecheck, openssf, etc.), auto-merged when `WITH=scorecard`. Do not manually merge. |
+| `config/nfs-dynamic-plugins.yaml` | NFS-compatible GHCR plugins (global header, theme, homepage, extensions, bulk import, TechDocs, Kubernetes, Tekton, Topology, ACR, Nexus, etc.), auto-merged when `WITH=nfs`. Do not manually merge. |
+| `config/rbac-dynamic-plugins.yaml` | RBAC frontend plugin (backend is baked into RHDH), auto-merged when `WITH=rbac`. Do not manually merge. |
 | `helm/value_file.yaml` | Helm chart value overrides (resource limits, replicas, etc.) |
 | `operator/subscription.yaml` | Backstage CR for operator deployments |
 

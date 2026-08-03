@@ -1,29 +1,21 @@
-- package: 'oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend:bs_1.49.4__2.7.8!red-hat-developer-hub-backstage-plugin-scorecard-backend'
+# Scorecard frontend
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard:pr_2592__3.0.0
   disabled: false
-- package: 'oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-github:bs_1.49.4__2.7.8!red-hat-developer-hub-backstage-plugin-scorecard-backend-module-github'
+
+# Scorecard backend
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend:pr_2592__3.0.0
   disabled: false
-- package: 'oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard:bs_1.49.4__2.7.8!red-hat-developer-hub-backstage-plugin-scorecard'
+
+# Scorecard backend modules
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-sonarqube:pr_2592__0.3.0
   disabled: false
-  pluginConfig:
-    dynamicPlugins:
-      frontend:
-        red-hat-developer-hub.backstage-plugin-scorecard:
-          translationResources:
-            - importName: scorecardTranslations
-              ref: scorecardTranslationRef
-          dynamicRoutes:
-            - path: /scorecard/aggregations/:aggregationId/metrics/:metricId
-              importName: ScorecardPage
-          entityTabs:
-            - path: /scorecard
-              title: Scorecard
-              mountPoint: entity.page.scorecard
-          mountPoints:
-            - mountPoint: entity.page.scorecard/cards
-              importName: EntityScorecardContent
-              config:
-                layout:
-                  gridColumn: "1 / -1"
-              if:
-                allOf:
-                  - isKind: component
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-jira:pr_2592__3.0.0
+  disabled: true # requires jira configuration
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-dependabot:pr_2592__0.4.0
+  disabled: false
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-github:pr_2592__3.0.0
+  disabled: false
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-filecheck:pr_2592__0.3.0
+  disabled: false
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-openssf:pr_2592__0.4.0
+  disabled: false
