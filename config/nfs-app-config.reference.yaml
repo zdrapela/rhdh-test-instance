@@ -1,0 +1,150 @@
+app:
+  packages: all
+  extensions:
+    # Lightspeed extensions (uncomment when lightspeed is enabled)
+    # - app-root-wrapper:app/drawer
+    # - app-root-wrapper:app/lightspeed-fab
+    # - translation:app/lightspeed-translations
+
+    # Quickstart extensions (uncomment to enable quickstart init)
+    # - app-root-element:app/quickstart-init
+    # - translation:app/quickstart-translations
+
+    # Translation workarounds for plugins (pending upstream PRs #4111, #10209, #3413)
+    # These won't work until translation modules are default-exported in plugin builds
+    # - translation:global-header/global-header-translations: true
+    # - translation:home/homepage-translations: true
+    # - translation:adoption-insights/adoption-insights-translations: true
+    # - translation:bulk-import/bulk-import-translations: true
+    # - translation:scorecard/scorecard-translations: true
+    # - translation:rbac/rbac-translations: true
+    # - translation:extensions/extensions-translations: true
+    # - translation:techdocs/techdocs-translations: true
+
+    - home-page-widget:home/search-bar: true
+    - api:home/visits: true
+    - app-root-element:home/visit-listener: true
+    - home-page-widget:home/quick-access-card: false
+    - home-page-widget:scorecard/scorecard-default-aggregation: false
+    - home-page-widget:scorecard/scorecard-deprecated-metric-id: false
+    - home-page-widget:scorecard/scorecard-github-filecheck-codeowners: false
+    - home-page-widget:scorecard/scorecard-github-filecheck-license: false
+    - home-page-widget:scorecard/scorecard-github-open-prs: false
+    - home-page-widget:scorecard/scorecard-github-open-prs-weighted: false
+    - home-page-widget:scorecard/scorecard-jira-open-issues: false
+    - home-page-widget:home/search-bar: false
+    - home-page-widget:home/starred-entities: false
+
+    - api:app/app-language:
+        config:
+          availableLanguages: ["en", "de", "fr", "it", "es", "ja"]
+          defaultLanguage: "en"
+
+    - api:home/visits: true
+    - app-root-element:home/visit-listener: true
+    # - gh-component:global-header/search:
+    #     config:
+    #       priority: 50
+    # - gh-menu-item:global-header/app-launcher-devhub:
+    #     config:
+    #       title: "Custom Title"
+    #       sectionLabel: mySection1
+    #       link: https://custom.example.com
+    - page:home:
+        config:
+          path: /
+    - home-page-layout:home/dynamic-homepage-layout:
+        config:
+          customizable: true
+          defaultWidgets:
+            - RhdhQuickAccess
+            - RhdhTemplateSection
+            - RhdhEntitySection
+          widgetLayout:
+            RhdhQuickAccess:
+              priority: 100
+              breakpoints:
+                xl: { w: 12, h: 5 }
+                lg: { w: 12, h: 5 }
+                md: { w: 12, h: 5 }
+                sm: { w: 12, h: 5 }
+                xs: { w: 12, h: 7.5 }
+                xxs: { w: 12, h: 13.5 }
+            RhdhTemplateSection:
+              priority: 200
+              breakpoints:
+                xl: { w: 12, h: 5 }
+                lg: { w: 12, h: 5 }
+                md: { w: 12, h: 5 }
+                sm: { w: 12, h: 5 }
+                xs: { w: 12, h: 7.5 }
+                xxs: { w: 12, h: 13.5 }
+            RhdhEntitySection:
+              priority: 200
+              breakpoints:
+                xl: { w: 12, h: 7 }
+                lg: { w: 12, h: 7 }
+                md: { w: 12, h: 8 }
+                sm: { w: 12, h: 9 }
+                xs: { w: 12, h: 11 }
+                xxs: { w: 12, h: 15 }
+
+  branding:
+    theme:
+      light:
+        variant: rhdh
+        palette:
+          primary:
+            main: "#0066CC"
+          rhdh:
+            general:
+              appBarBackgroundColor: "#0A1628"
+      dark:
+        variant: rhdh
+        palette:
+          primary:
+            main: "#73BCF7"
+
+# globalHeader:
+#   components:
+#     - title: Visualizer Dashboard
+#       icon: dashboard
+#       link: /visualizer/tree
+#       priority: 75
+#   menuItems:
+#     - target: app-launcher
+#       title: Internal Wiki
+#       icon: article
+#       link: https://wiki.internal.example.com
+#       sectionLabel: Resources
+#       priority: 80
+#     - target: app-launcher
+#       title: Issue Tracker
+#       icon: bug_report
+#       link: https://issues.internal.example.com
+#       sectionLabel: Resources
+#       priority: 70
+#     - target: help
+#       title: FAQ
+#       icon: quiz
+#       link: https://faq.example.com
+#       sectionLabel: Support
+#       priority: 90
+#     - target: help
+#       title: Community Forum
+#       icon: forum
+#       link: https://forum.example.com
+#       sectionLabel: Support
+#       priority: 80
+
+catalog:
+  defaultOwnerFilter: all
+
+intelligent-assistant:
+  servicePort: 8080
+  notebooks:
+    enabled: true
+    queryDefaults:
+      model: redhataillama-31-8b-instruct
+      provider_id: vllm
+

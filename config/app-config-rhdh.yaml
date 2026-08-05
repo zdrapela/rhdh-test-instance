@@ -5,6 +5,23 @@ backend:
   baseUrl: '${RHDH_BASE_URL}'
   cors:
     origin: '${RHDH_BASE_URL}'
+  actions:
+    pluginSources:
+      - software-catalog-mcp-extras
+      - techdocs-mcp-extras
+      - scaffolder-mcp-extras
+  auth:
+    externalAccess:
+      - type: legacy
+        options:
+          secret: '${BACKEND_SECRET}'
+          subject: legacy-default-config
+      - type: static
+        options:
+          token: '${MCP_TOKEN}'
+          subject: mcp-clients
+    keys:
+      - secret: '${BACKEND_SECRET}'
   csp:
     connect-src:
       - "'self'"
@@ -27,6 +44,10 @@ i18n:
 permission:
   enabled: true
   rbac:
+    pluginsWithPermission:
+      - catalog
+      - permission
+      - intelligent-assistant
     admin:
       superUsers:
         - name: user:default/test1
@@ -74,3 +95,6 @@ catalog:
       target: ./catalog-entities/plugins.yaml
     - type: file
       target: ./catalog-entities/topology-test.yaml
+
+mcpActions:
+  namespacedToolNames: false

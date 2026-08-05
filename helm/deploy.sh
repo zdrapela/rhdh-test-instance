@@ -152,9 +152,16 @@ EOF
     HELM_ARGS+=(-f "$NFS_VALUES_FILE")
 fi
 
-# Lightspeed and scorecard plugins are now appended to the dynamic-plugins
-# ConfigMap by deploy.sh based on WITH_LIGHTSPEED / WITH_SCORECARD flags.
-# No additional helm overrides needed here.
+# Enable Lightspeed Core Service sidecar via Helm chart native support
+if [[ "${WITH_LIGHTSPEED}" == "1" && "${LIGHTSPEED_HAS_PROVIDER:-false}" == "true" ]]; then
+    echo "Enabling Lightspeed Core Service sidecar via Helm chart..."
+    HELM_ARGS+=(
+        --set global.lightspeed.enabled=true
+        --set global.lightspeed.secret.create=false
+        --set global.lightspeed.secret.name=lightspeed-secret
+        --set-json 'global.lightspeed.sidecar.env=[{"name":"SERVICE_HOST","value":"0.0.0.0"}]'
+    )
+fi
 
 # Override RHDH container image if RHDH_IMAGE is set (e.g. quay.io/rhdh-community/rhdh:pr-1234)
 if [[ -n "${RHDH_IMAGE}" ]]; then
@@ -174,7 +181,16 @@ fi
 helm upgrade --install redhat-developer-hub "${CHART_URL}" --version "$CV" "${HELM_ARGS[@]}"
 
 
-# Scale down and up to ensure fresh pods (helm does not monitor config changes)
+# Scale down, apply any post-Helm ConfigMap patches while pods are stopped,
+# then scale back up — single restart cycle to avoid competing ReplicaSets.
 oc scale deployment -l 'app.kubernetes.io/instance in (redhat-developer-hub,developer-hub)' --replicas=0 -n "$namespace"
 oc wait --for=delete pod -l 'app.kubernetes.io/instance in (redhat-developer-hub,developer-hub),app.kubernetes.io/name!=postgresql' -n "$namespace" --timeout=120s || true
+
+# Patch Helm-generated ConfigMaps while pods are down (functions are no-ops if
+# lightspeed is not enabled or ConfigMaps don't exist yet)
+if [[ "${WITH_LIGHTSPEED}" == "1" ]] && type -t patch_helm_appconfig_for_mcp &>/dev/null; then
+    patch_helm_appconfig_for_mcp
+    patch_lcs_allowed_models
+fi
+
 oc scale deployment -l 'app.kubernetes.io/instance in (redhat-developer-hub,developer-hub)' --replicas=1 -n "$namespace"

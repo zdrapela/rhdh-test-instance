@@ -24,7 +24,7 @@ data:
       description: Test component for validating the Kubernetes and Topology plugins against live cluster resources
       annotations:
         backstage.io/kubernetes-id: developer-hub
-        backstage.io/kubernetes-namespace: rhdh
+        backstage.io/kubernetes-namespace: ${NAMESPACE}
         janus-idp.io/tekton: topology-test
       tags:
         - test

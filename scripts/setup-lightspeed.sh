@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 #
-# Lightspeed Core Service (LCS) setup for RHDH
+# Lightspeed setup for RHDH
 #
-# Creates the ConfigMaps and Secret required by the LCS sidecar, then
-# patches the RHDH deployment to include the sidecar container.
+# Detects configured LLM providers and creates the Secret needed by the
+# Helm chart's built-in LCS sidecar (global.lightspeed.enabled=true).
 #
-# If no LLM provider credentials are configured, the LCS sidecar is
-# skipped entirely — only the dynamic plugins are loaded (the UI will
-# show "Could not load models" until credentials are added).
+# The sidecar itself is deployed by the Helm chart — no custom patching needed.
 #
 # Required env vars: NAMESPACE
 # Optional env vars (from .env): ENABLE_OPENAI, OPENAI_API_KEY, ENABLE_VLLM,
@@ -19,9 +17,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 LCS_RESOURCES="${ROOT_DIR}/resources/lightspeed"
 
-LCS_IMAGE="registry.redhat.io/lightspeed-core/lightspeed-stack-rhel9@sha256:a1ad27dee55d8c655d6ef218ad7c252e4bc33ab7aa7ac514161264773575c77e"
-
-# Set to true by has_lightspeed_provider; checked by deploy.sh
 LIGHTSPEED_HAS_PROVIDER=false
 
 has_lightspeed_provider() {
@@ -32,133 +27,173 @@ has_lightspeed_provider() {
     if [[ "${ENABLE_VERTEX_AI:-}" == "true" && -n "${VERTEX_AI_PROJECT:-}" ]]; then LIGHTSPEED_HAS_PROVIDER=true; fi
 }
 
-setup_lightspeed_resources() {
+setup_lightspeed_secret() {
     echo ""
     echo "=============================================="
-    echo "Lightspeed Core Service — Setup"
+    echo "Lightspeed — Secret Setup"
     echo "=============================================="
 
     has_lightspeed_provider
 
     if [[ "${LIGHTSPEED_HAS_PROVIDER}" == "false" ]]; then
         echo ""
-        echo "  No LLM provider credentials found. Skipping LCS sidecar deployment."
+        echo "  No LLM provider credentials found."
         echo "  The Intelligent Assistant UI will load but cannot connect to an LLM."
-        echo ""
-        echo "  To enable later, add credentials to .env and redeploy, or run:"
-        echo ""
-        echo "  1. Create the secret:"
-        echo "     oc create secret generic lightspeed-secret -n ${NAMESPACE} \\"
-        echo "       --from-literal=ENABLE_OPENAI=true \\"
-        echo "       --from-literal=OPENAI_API_KEY=sk-..."
-        echo ""
-        echo "  2. Then run the LCS setup:"
-        echo "     WITH_LIGHTSPEED=1 NAMESPACE=${NAMESPACE} source scripts/setup-lightspeed.sh"
-        echo "     setup_lightspeed_resources  # will detect credentials this time"
-        echo "     patch_lightspeed_sidecar"
+        echo "  Add credentials to .env and redeploy to enable."
         echo ""
         return 0
     fi
 
-    echo "LLM provider detected. Setting up LCS resources..."
+    echo "LLM provider detected. Creating lightspeed-secret..."
 
-    # ConfigMaps (no envsubst needed — these use ${env.*} syntax resolved by LCS at runtime)
-    for cm in lightspeed-stack lightspeed-config lightspeed-rhdh-profile; do
-        oc apply -f "${LCS_RESOURCES}/${cm}.yaml" --namespace="${NAMESPACE}"
-    done
-
-    # Secret (uses envsubst to inject values from .env / environment)
     envsubst < "${LCS_RESOURCES}/lightspeed-secret.yaml" \
         | oc apply -f - --namespace="${NAMESPACE}"
 
-    echo "Lightspeed resources created in ${NAMESPACE}."
+    echo "Lightspeed secret created in ${NAMESPACE}."
+
+    # Ensure MCP_TOKEN is in rhdh-secrets (patch if secret already exists)
+    if [[ -n "${MCP_TOKEN:-}" ]]; then
+        echo "Patching rhdh-secrets with MCP_TOKEN..."
+        oc patch secret rhdh-secrets -n "${NAMESPACE}" --type=merge \
+            -p "{\"stringData\":{\"MCP_TOKEN\":\"${MCP_TOKEN}\"}}"
+    fi
 }
 
-patch_lightspeed_sidecar() {
+# Patch the Helm-generated app-config ConfigMap to include MCP static token auth.
+# The Helm chart creates `redhat-developer-hub-app-config` which sets
+# backend.auth.externalAccess with only the legacy type. Since Backstage replaces
+# arrays (does not merge), this overwrites our custom backend.auth entries in
+# app-config-rhdh.yaml. We patch the Helm ConfigMap post-install to add both the
+# legacy entry AND the static MCP token entry.
+patch_helm_appconfig_for_mcp() {
     echo ""
     echo "=============================================="
-    echo "Lightspeed Core Service — Patching Deployment"
+    echo "MCP — Patching Helm app-config for static token auth"
     echo "=============================================="
 
-    local deployment_name
-    deployment_name=$(oc get deployment -n "${NAMESPACE}" \
-        -l 'app.kubernetes.io/instance in (redhat-developer-hub,developer-hub)' \
-        -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-
-    if [[ -z "${deployment_name}" ]]; then
-        echo "Error: No RHDH deployment found in ${NAMESPACE}. Skipping LCS sidecar patch."
-        return 1
-    fi
-
-    # Check if sidecar is already present
-    if oc get deployment "${deployment_name}" -n "${NAMESPACE}" \
-        -o jsonpath='{.spec.template.spec.containers[*].name}' | grep -q 'lightspeed-core'; then
-        echo "LCS sidecar already present in ${deployment_name}, skipping patch."
+    local cm_name="redhat-developer-hub-app-config"
+    if ! oc get configmap "${cm_name}" -n "${NAMESPACE}" &>/dev/null; then
+        echo "Warning: ConfigMap ${cm_name} not found. Skipping MCP patch."
         return 0
     fi
 
-    echo "Patching deployment ${deployment_name} with lightspeed-core sidecar..."
+    # The Helm chart stores config under "app-config.yaml" (dots in key name
+    # break jsonpath, so use python to extract)
+    local existing_yaml
+    existing_yaml=$(oc get configmap "${cm_name}" -n "${NAMESPACE}" \
+        -o json | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('app-config.yaml',''))")
 
-    # Scale down first to avoid two pods competing for the same database
-    # (the patch changes the pod template, triggering a new ReplicaSet)
-    echo "Scaling down ${deployment_name} before patch..."
-    oc scale deployment "${deployment_name}" -n "${NAMESPACE}" --replicas=0
-    oc wait --for=delete pod -l "app.kubernetes.io/instance in (redhat-developer-hub,developer-hub),app.kubernetes.io/name!=postgresql" \
-        -n "${NAMESPACE}" --timeout=120s 2>/dev/null || true
+    local patch_file
+    patch_file=$(mktemp)
 
-    local patch_json
-    patch_json=$(cat <<PATCH
-[
-  {
-    "op": "add",
-    "path": "/spec/template/spec/containers/-",
-    "value": {
-      "name": "lightspeed-core",
-      "image": "${LCS_IMAGE}",
-      "imagePullPolicy": "IfNotPresent",
-      "securityContext": {
-        "allowPrivilegeEscalation": false,
-        "capabilities": {"drop": ["ALL"]},
-        "readOnlyRootFilesystem": false,
-        "runAsNonRoot": true,
-        "seccompProfile": {"type": "RuntimeDefault"}
-      },
-      "ports": [
-        {"name": "http-lightspeed", "containerPort": 8080, "protocol": "TCP"}
-      ],
-      "envFrom": [
-        {"secretRef": {"name": "lightspeed-secret", "optional": false}}
-      ],
-      "resources": {
-        "limits": {"cpu": "1000m", "memory": "2Gi"},
-        "requests": {"cpu": "100m", "memory": "512Mi"}
-      },
-      "volumeMounts": [
-        {"name": "lightspeed-data", "mountPath": "/tmp"},
-        {"name": "lightspeed-rag", "mountPath": "/rag-content"},
-        {"name": "lightspeed-config-stack", "mountPath": "/app-root/lightspeed-stack.yaml", "subPath": "lightspeed-stack.yaml", "readOnly": true},
-        {"name": "lightspeed-config-config", "mountPath": "/app-root/config.yaml", "subPath": "config.yaml", "readOnly": true},
-        {"name": "lightspeed-config-rhdh-profile", "mountPath": "/app-root/rhdh-profile.py", "subPath": "rhdh-profile.py", "readOnly": true},
-        {"name": "lightspeed-llama-data", "mountPath": "/opt/app-root/src/.llama"}
-      ]
-    }
-  },
-  {"op": "add", "path": "/spec/template/spec/volumes/-", "value": {"name": "lightspeed-data", "emptyDir": {}}},
-  {"op": "add", "path": "/spec/template/spec/volumes/-", "value": {"name": "lightspeed-rag", "emptyDir": {}}},
-  {"op": "add", "path": "/spec/template/spec/volumes/-", "value": {"name": "lightspeed-config-stack", "configMap": {"name": "lightspeed-stack", "optional": false}}},
-  {"op": "add", "path": "/spec/template/spec/volumes/-", "value": {"name": "lightspeed-config-config", "configMap": {"name": "lightspeed-config", "optional": false}}},
-  {"op": "add", "path": "/spec/template/spec/volumes/-", "value": {"name": "lightspeed-config-rhdh-profile", "configMap": {"name": "lightspeed-rhdh-profile", "optional": false}}},
-  {"op": "add", "path": "/spec/template/spec/volumes/-", "value": {"name": "lightspeed-llama-data", "emptyDir": {}}}
-]
-PATCH
-)
+    # Replace the backend.auth section using Python string manipulation (stdlib only)
+    echo "${existing_yaml}" \
+      | python3 -c "
+import sys, re
 
-    oc patch deployment "${deployment_name}" -n "${NAMESPACE}" --type='json' -p "${patch_json}"
+content = sys.stdin.read()
 
-    echo "LCS sidecar patched into ${deployment_name}."
+auth_replacement = '''  auth:
+    keys:
+      - secret: '\${BACKEND_SECRET}'
+    externalAccess:
+      - type: legacy
+        options:
+          secret: '\${BACKEND_SECRET}'
+          subject: legacy-default-config
+      - type: static
+        options:
+          token: '\${MCP_TOKEN}'
+          subject: mcp-clients'''
 
-    # Scale back up and wait for the single pod to become ready
-    echo "Scaling up ${deployment_name}..."
-    oc scale deployment "${deployment_name}" -n "${NAMESPACE}" --replicas=1
-    oc rollout status deployment "${deployment_name}" -n "${NAMESPACE}" --timeout=300s
+# Match the auth: block under backend: up to the next peer-level key
+pattern = r'(  auth:\n(?:    .*\n)*)'
+match = re.search(pattern, content)
+if match:
+    content = content[:match.start()] + auth_replacement + '\n' + content[match.end():]
+else:
+    content = content.replace('backend:\n', 'backend:\n' + auth_replacement + '\n', 1)
+
+sys.stdout.write(content)
+" > "${patch_file}"
+
+    # Preserve the default-app-config.yaml key if it exists
+    local default_config_file
+    default_config_file=$(mktemp)
+    oc get configmap "${cm_name}" -n "${NAMESPACE}" \
+        -o json | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('default-app-config.yaml',''))" \
+        > "${default_config_file}" 2>/dev/null || true
+
+    local from_file_args=("--from-file=app-config.yaml=${patch_file}")
+    if [[ -s "${default_config_file}" ]]; then
+        from_file_args+=("--from-file=default-app-config.yaml=${default_config_file}")
+    fi
+
+    oc create configmap "${cm_name}" \
+        "${from_file_args[@]}" \
+        --namespace="${NAMESPACE}" \
+        --dry-run=client -o yaml | oc apply -f - --namespace="${NAMESPACE}"
+
+    rm -f "${patch_file}" "${default_config_file}"
+    echo "Helm app-config patched with MCP static token auth."
+}
+
+# Patch the LCS config to restrict visible OpenAI models
+patch_lcs_allowed_models() {
+    echo ""
+    echo "=============================================="
+    echo "LCS — Patching allowed_models for OpenAI"
+    echo "=============================================="
+
+    local cm_name="redhat-developer-hub-lightspeed-config"
+    if ! oc get configmap "${cm_name}" -n "${NAMESPACE}" &>/dev/null; then
+        echo "LCS config ConfigMap not found. Skipping allowed_models patch."
+        return 0
+    fi
+
+    if [[ "${ENABLE_OPENAI:-}" != "true" ]]; then
+        echo "OpenAI not enabled. Skipping allowed_models patch."
+        return 0
+    fi
+
+    local config_yaml
+    config_yaml=$(oc get configmap "${cm_name}" -n "${NAMESPACE}" \
+        -o jsonpath='{.data.config\.yaml}')
+
+    # Only patch if allowed_models is not already set
+    if echo "${config_yaml}" | grep -q "allowed_models"; then
+        echo "allowed_models already configured. Skipping."
+        return 0
+    fi
+
+    local patch_file
+    patch_file=$(mktemp)
+
+    # Add allowed_models under the OpenAI provider's config block (stdlib only)
+    echo "${config_yaml}" \
+      | python3 -c "
+import sys, re
+
+content = sys.stdin.read()
+
+pattern = r'(provider_type: remote::openai\s*\n\s*config:\s*\n\s*api_key:[^\n]*)'
+match = re.search(pattern, content)
+if match:
+    content = content[:match.end()] + '''
+        allowed_models:
+          - gpt-4o-mini
+          - gpt-4.1-mini
+          - gpt-4.1-nano
+          - gpt-4o''' + content[match.end():]
+
+sys.stdout.write(content)
+" > "${patch_file}"
+
+    oc create configmap "${cm_name}" \
+        --from-file="config.yaml=${patch_file}" \
+        --namespace="${NAMESPACE}" \
+        --dry-run=client -o yaml | oc apply -f - --namespace="${NAMESPACE}"
+
+    rm -f "${patch_file}"
+    echo "LCS config patched with allowed_models."
 }

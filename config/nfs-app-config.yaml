@@ -1,119 +1,114 @@
 app:
   packages: all
   extensions:
-    # Lightspeed extensions (uncomment when lightspeed is enabled)
-    # - app-root-wrapper:app/drawer
-    # - app-root-wrapper:app/lightspeed-fab
-    # - translation:app/lightspeed-translations
-
-    # Quickstart extensions (uncomment to enable quickstart init)
-    # - app-root-element:app/quickstart-init
-    # - translation:app/quickstart-translations
-
-    # Translation workarounds for plugins
-    - translation:global-header/global-header-translations: true
-    - translation:home/homepage-translations: true
-    - translation:adoption-insights/adoption-insights-translations: true
-    - translation:bulk-import/bulk-import-translations: true
-    - translation:scorecard/scorecard-translations: true
-    - translation:rbac/rbac-translations: true
-    - translation:extensions/extensions-translations: true
-    - translation:techdocs/techdocs-translations: true
-
     - api:app/app-language:
         config:
           availableLanguages: ["en", "de", "fr", "it", "es", "ja"]
           defaultLanguage: "en"
 
+    - home-page-widget:home/search-bar: true
     - api:home/visits: true
     - app-root-element:home/visit-listener: true
-    - gh-component:global-header/search:
-        config:
-          priority: 50
-    - gh-menu-item:global-header/app-launcher-devhub:
-        config:
-          title: "Custom Title"
-          sectionLabel: mySection1
-          link: https://custom.example.com
+    - home-page-widget:home/quick-access-card: false
+    - home-page-widget:scorecard/scorecard-default-aggregation: false
+    - home-page-widget:scorecard/scorecard-deprecated-metric-id: false
+    - home-page-widget:scorecard/scorecard-github-filecheck-codeowners: false
+    - home-page-widget:scorecard/scorecard-github-filecheck-license: false
+    - home-page-widget:scorecard/scorecard-github-open-prs: false
+    - home-page-widget:scorecard/scorecard-github-open-prs-weighted: false
+    - home-page-widget:scorecard/scorecard-jira-open-issues: false
+    - home-page-widget:home/search-bar: false
+    - home-page-widget:home/starred-entities: false
+
     - page:home:
         config:
           path: /
-    - home-page-layout:home/dynamic-homepage-layout:
-        config:
-          customizable: true
-          widgetLayout:
-            RhdhTemplateSection:
-              priority: 200
-              breakpoints:
-                xl: { w: 12, h: 5 }
-                lg: { w: 12, h: 5 }
-                md: { w: 12, h: 5 }
-                sm: { w: 12, h: 5 }
-                xs: { w: 12, h: 7.5 }
-                xxs: { w: 12, h: 13.5 }
-            RhdhEntitySection:
-              priority: 200
-              breakpoints:
-                xl: { w: 12, h: 7 }
-                lg: { w: 12, h: 7 }
-                md: { w: 12, h: 8 }
-                sm: { w: 12, h: 9 }
-                xs: { w: 12, h: 11 }
-                xxs: { w: 12, h: 15 }
-            RhdhOnboardingSection:
-              priority: 300
-              breakpoints:
-                xl: { w: 12, h: 6 }
-                lg: { w: 12, h: 6 }
-                md: { w: 12, h: 7 }
-                sm: { w: 12, h: 8 }
-                xs: { w: 12, h: 9 }
-                xxs: { w: 12, h: 14 }
 
-  branding:
-    theme:
-      light:
-        variant: rhdh
-        palette:
-          primary:
-            main: "#0066CC"
-          rhdh:
-            general:
-              appBarBackgroundColor: "#0A1628"
-      dark:
-        variant: rhdh
-        palette:
-          primary:
-            main: "#73BCF7"
+  quickstart:
+    - title: Set up authentication
+      icon: Admin
+      description: Set up secure login credentials to protect your account from unauthorized access.
+      cta:
+        text: Learn more
+        link: https://docs.redhat.com/en/documentation/red_hat_developer_hub/latest/html/authentication_in_red_hat_developer_hub/
+    - title: Configure RBAC
+      icon: Rbac
+      description: Assign roles and permissions to control who can view, create, or edit resources, ensuring secure and efficient collaboration.
+      cta:
+        text: Manage access
+        link: /rbac
+    - title: Configure Git
+      icon: Git
+      description: Connect your Git providers, such as GitHub to manage code, automate workflows, and integrate with platform features.
+      cta:
+        text: Learn more
+        link: https://docs.redhat.com/en/documentation/red_hat_developer_hub/latest/html/integrating_red_hat_developer_hub_with_github/
+    - title: Manage plugins
+      icon: Plugins
+      description: Browse and install extensions to add features, connect with external tools, and customize your experience.
+      cta:
+        text: Explore plugins
+        link: /extensions
+    - title: Import application
+      roles: ['developer']
+      icon: Import
+      description: Import your existing code and services into the catalog to organize and access them through your developer portal.
+      cta:
+        text: Import
+        link: /bulk-import
+    - title: Learn about the Catalog
+      roles: ['developer']
+      icon: Catalog
+      description: Discover all software components, services, and APIs, and view their owners and documentation.
+      cta:
+        text: View Catalog
+        link: /catalog
+    - title: Explore Self-service templates
+      roles: ['developer']
+      icon: SelfService
+      description: Use our self-service templates to quickly set up new projects, services, or documentation.
+      cta:
+        text: Explore templates
+        link: /create
+    - title: Find all Learning Paths
+      roles: ['developer']
+      icon: Learning
+      description: Integrate tailored e-learning into your workflows with Learning Paths to accelerate onboarding, close skill gaps, and promote best practices.
+      cta:
+        text: View Learning Paths
+        link: /learning-paths
+    - title: Set up Intelligent Assistant
+      icon: Lightspeed
+      description: Connect Intelligent Assistant to a supported large language model (LLM) and configure permissions to provide AI-powered assistance to your developers.
+      cta:
+        text: Learn more
+        link: https://docs.redhat.com/en/documentation/red_hat_developer_hub/latest/html/interacting_with_red_hat_developer_lightspeed_for_red_hat_developer_hub/
+    - title: Get started with Intelligent Assistant
+      icon: Lightspeed
+      roles: ['developer']
+      description: Troubleshoot issues, generate code, and learn about platform resources using AI-powered chat.
+      cta:
+        text: Learn more
+        link: https://docs.redhat.com/en/documentation/red_hat_developer_hub/latest/html/interacting_with_red_hat_developer_lightspeed_for_red_hat_developer_hub/
 
-globalHeader:
-  components:
-    - title: Visualizer Dashboard
-      icon: dashboard
-      link: /visualizer/tree
-      priority: 75
-  menuItems:
-    - target: app-launcher
-      title: Internal Wiki
-      icon: article
-      link: https://wiki.internal.example.com
-      sectionLabel: Resources
-      priority: 80
-    - target: app-launcher
-      title: Issue Tracker
-      icon: bug_report
-      link: https://issues.internal.example.com
-      sectionLabel: Resources
-      priority: 70
-    - target: help
-      title: FAQ
-      icon: quiz
-      link: https://faq.example.com
-      sectionLabel: Support
-      priority: 90
-    - target: help
-      title: Community Forum
-      icon: forum
-      link: https://forum.example.com
-      sectionLabel: Support
-      priority: 80
+catalog:
+  defaultOwnerFilter: all
+
+intelligent-assistant:
+  servicePort: 8080
+  notebooks:
+    enabled: true
+    queryDefaults:
+      model: gpt-4o-mini
+      provider_id: openai
+  mcpServers:
+    - name: mcp-integration-tools
+      auth: dcr
+    - name: mcp-token-required-tools
+    - name: mcp-observability-tools
+      token: ${MCP_TOKEN}
+  prompts:
+    - title: Getting Started with Red Hat Developer Hub
+      message: >-
+        Can you guide me through the first steps to start using Developer Hub as
+        a developer, like exploring the Software Catalog and adding my service?

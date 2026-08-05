@@ -62,6 +62,7 @@ create_rhdh_secrets() {
       --from-literal=KEYCLOAK_CLIENT_SECRET="${KEYCLOAK_CLIENT_SECRET:-}" \
       --from-literal=LIGHTHOUSE_URL="${LIGHTHOUSE_URL:-}" \
       --from-literal=LIGHTHOUSE_SVC_URL="${LIGHTHOUSE_SVC_URL:-}" \
+      --from-literal=MCP_TOKEN="${MCP_TOKEN:-}" \
       --namespace="${NAMESPACE}"
 
     echo "rhdh-secrets created!"
@@ -94,7 +95,7 @@ apply_catalog_entities() {
   for f in plugins.yaml; do
     if [[ -f "${catalog_dir}/${f}" ]]; then
       echo "  Applying: ${f}"
-      envsubst '${RHDH_BASE_URL}' < "${catalog_dir}/${f}" | oc apply -f - --namespace="${NAMESPACE}"
+      envsubst '${RHDH_BASE_URL} ${NAMESPACE}' < "${catalog_dir}/${f}" | oc apply -f - --namespace="${NAMESPACE}"
     fi
   done
 
@@ -103,7 +104,7 @@ apply_catalog_entities() {
     for f in components.yaml resources.yaml; do
       if [[ -f "${catalog_dir}/${f}" ]]; then
         echo "  Applying: ${f}"
-        envsubst '${RHDH_BASE_URL}' < "${catalog_dir}/${f}" | oc apply -f - --namespace="${NAMESPACE}"
+        envsubst '${RHDH_BASE_URL} ${NAMESPACE}' < "${catalog_dir}/${f}" | oc apply -f - --namespace="${NAMESPACE}"
       fi
     done
   else
@@ -114,7 +115,7 @@ apply_catalog_entities() {
   if [[ "${WITH_ORCHESTRATOR:-0}" == "1" ]]; then
     if [[ -f "${catalog_dir}/operators.yaml" ]]; then
       echo "  Applying: operators.yaml"
-      envsubst '${RHDH_BASE_URL}' < "${catalog_dir}/operators.yaml" | oc apply -f - --namespace="${NAMESPACE}"
+      envsubst '${RHDH_BASE_URL} ${NAMESPACE}' < "${catalog_dir}/operators.yaml" | oc apply -f - --namespace="${NAMESPACE}"
     fi
   else
     echo "  Skipping: operators.yaml (orchestrator not enabled)"

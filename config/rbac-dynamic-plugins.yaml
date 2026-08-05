@@ -1,5 +1,5 @@
 # RBAC frontend (upgraded to 2.0.0 via PR #2993)
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-rbac:bs_1.52.0__2.0.0
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-rbac:bs_1.52.0__2.1.0
   disabled: false
 
 # RBAC backend — baked into RHDH backend as a direct dependency

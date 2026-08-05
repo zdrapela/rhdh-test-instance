@@ -188,8 +188,9 @@ fi
 
 if [[ "${WITH_LIGHTSPEED}" == "1" ]]; then
     _append_plugin_dynamic_config "${PWD}/config/lightspeed-dynamic-plugins.yaml" "Lightspeed"
+    _append_plugin_dynamic_config "${PWD}/config/mcp-dynamic-plugins.yaml" "MCP"
     source scripts/setup-lightspeed.sh
-    setup_lightspeed_resources
+    setup_lightspeed_secret
 fi
 
 if [[ "${WITH_SCORECARD}" == "1" ]]; then
@@ -210,11 +211,6 @@ else
         source operator/install-operator.sh "$version"
     fi
     source operator/deploy.sh "$namespace" "$version"
-fi
-
-# Patch deployment with LCS sidecar only if an LLM provider is configured
-if [[ "${WITH_LIGHTSPEED}" == "1" && "${LIGHTSPEED_HAS_PROVIDER}" == "true" ]]; then
-    patch_lightspeed_sidecar
 fi
 
 # Wait for the deployment to be ready
