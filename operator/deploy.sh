@@ -137,22 +137,19 @@ ORCHCFG
     ORCH_CONFIG_BLOCK="
         - name: app-config-orchestrator"
 fi
-if [[ "${WITH_LIGHTSPEED}" == "1" ]]; then
-    echo "Lightspeed: using catalog index default."
-fi
-if [[ "${WITH_SCORECARD}" == "1" ]]; then
-    echo "Scorecard: using catalog index default."
-fi
-
 # Build NFS env var block if requested
 NFS_ENV_BLOCK=""
+NFS_CONFIG_BLOCK=""
 if [[ "${WITH_NFS}" == "1" ]]; then
-    echo "Enabling New Frontend System (app-next) for operator instance..."
+    # RHDH 2.1+ ships NFS as the default `app` package — do not set
+    # APP_CONFIG_app_packageName=app-next (package removed; breaks startup).
+    echo "Enabling NFS extras (module federation) for operator instance..."
     NFS_ENV_BLOCK="
-        - name: APP_CONFIG_app_packageName
-          value: \"app-next\"
         - name: ENABLE_STANDARD_MODULE_FEDERATION
           value: \"true\""
+    # app-config-nfs ConfigMap is created in deploy.sh when WITH_NFS=1
+    NFS_CONFIG_BLOCK="
+        - name: app-config-nfs"
 fi
 
 # Build custom image line if RHDH_IMAGE is set (e.g. for NFS PR images)
@@ -174,6 +171,25 @@ if [[ -n "${GUEST_AUTH_CONFIG_MAP_ENTRY:-}" ]]; then
         - name: app-config-guest-auth"
 fi
 
+# Lightspeed: operator path uses the same dynamic-plugins + lightspeed-secret
+# created in deploy.sh. Native LCS sidecar is Helm-only for now; without an
+# LLM provider the IA UI still loads (models list may be empty).
+if [[ "${WITH_LIGHTSPEED}" == "1" ]]; then
+    echo "Lightspeed plugins and secret are configured via deploy.sh overlays."
+fi
+if [[ "${WITH_SCORECARD}" == "1" ]]; then
+    echo "Scorecard plugins are configured via deploy.sh overlays."
+fi
+if [[ "${WITH_RBAC}" == "1" ]]; then
+    echo "RBAC plugins are configured via deploy.sh overlays."
+fi
+
+# RHDH 2.1 operator enables the intelligent-assistant flavour by default when
+# flavours is unset. That injects ref:// IA plugins + LCS sidecar and duplicates
+# our ConfigMap overlays (InstallException: Duplicate OCI plugin). Disable the
+# default flavour; WITH=lightspeed enables IA via lightspeed-dynamic-plugins.yaml.
+echo "Disabling default intelligent-assistant flavour (plugins come from ConfigMap overlays)."
+
 # Generate the Backstage CR with all env vars inline
 cat <<EOF | oc apply -f - -n "$namespace"
 apiVersion: rhdh.redhat.com/${BACKSTAGE_API_VERSION}
@@ -185,7 +201,7 @@ spec:
 ${IMAGE_LINE:+$IMAGE_LINE
 }    appConfig:
       configMaps:
-        - name: app-config-rhdh${GUEST_AUTH_BLOCK}${ORCH_CONFIG_BLOCK}
+        - name: app-config-rhdh${GUEST_AUTH_BLOCK}${NFS_CONFIG_BLOCK}${ORCH_CONFIG_BLOCK}
       mountPath: /opt/app-root/src
     extraFiles:
       mountPath: /opt/app-root/src
@@ -203,6 +219,9 @@ ${IMAGE_LINE:+$IMAGE_LINE
         - name: rhdh-secrets
   database:
     enableLocalDb: true
+  flavours:
+    - name: intelligent-assistant
+      enabled: false
 EOF
 
 echo "Waiting for RHDH deployment to roll out..."

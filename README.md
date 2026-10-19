@@ -10,7 +10,7 @@ This project provides automated deployment scripts and configuration files to se
 
 - 🤖 **GitHub PR Integration** with `/test` command for on-demand deployments
 - 📦 **Multiple Install Types**: Support for both Helm and Operator installation methods
-- 🔄 **Flexible Version Support**: Deploy any RHDH version (`next`, `1.11`, `1.9-190-CI`)
+- 🔄 **Flexible Version Support**: Deploy any RHDH version (`2.1`, `2.1-128-CI`, `next`, `1.11`)
 - 🔐 **Shared Keycloak OIDC**: Automatic Keycloak setup in a shared namespace — all instances share one Keycloak
 - 🧩 **Optional Components**: Enable NFS, Lightspeed, Scorecard, Orchestrator, RBAC via `WITH=`
 - 🌐 **Cluster Information Sharing**: Automatic sharing of deployment URLs, OpenShift console access, and cluster credentials
@@ -126,8 +126,8 @@ For local development and testing environments, you can deploy RHDH directly to 
 
    ```bash
    make deploy-helm                                # Basic deploy (Keycloak OIDC auto-configured)
-   make deploy-helm WITH=nfs                       # With New Frontend System
-   make deploy-helm WITH=nfs,lightspeed            # With NFS + Lightspeed AI assistant
+   make deploy-helm VERSION=2.1 WITH=nfs           # 2.1 test day: New Frontend System
+   make deploy-helm VERSION=2.1 WITH=nfs,lightspeed,scorecard,rbac
    make deploy-helm WITH=all                       # Everything enabled
    make deploy-helm WITH=all WITHOUT=orchestrator  # Everything except orchestrator
    ```
@@ -158,16 +158,18 @@ make deploy-helm WITH=all
 make deploy-helm WITH=all WITHOUT=orchestrator,lightspeed
 
 # With a specific version and components
-make deploy-helm VERSION=1.11 WITH=nfs,lightspeed
-make deploy-helm VERSION=1.11 NAMESPACE=team-a WITH=nfs,lightspeed,scorecard,rbac
+make deploy-helm VERSION=2.1 WITH=nfs,lightspeed
+make deploy-helm VERSION=2.1 NAMESPACE=team-a WITH=nfs,lightspeed,scorecard,rbac
+make deploy-helm VERSION=2.1-128-CI WITH=nfs
 make deploy-helm VERSION=next WITH=all WITHOUT=orchestrator
 
 # With a custom RHDH image
 make deploy-helm RHDH_IMAGE=quay.io/rhdh-community/rhdh:pr-1234 WITH=nfs
 
 # Operator (one-time operator install, then deploy instance)
-make install-operator VERSION=1.9
-make deploy-operator VERSION=1.9 WITH=nfs
+make install-operator VERSION=2.1
+make deploy-operator VERSION=2.1 WITH=nfs
+make deploy-operator VERSION=2.1 WITH=nfs,lightspeed,scorecard,rbac
 ```
 
 #### Shared Keycloak

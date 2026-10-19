@@ -1,4 +1,9 @@
-- package: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-catalog-backend-module-keycloak:pr_2510__3.21.0"
+# OIDC auth backend module — required on RHDH 2.x NFS overlays when the
+# catalog-index OIDC provider is not loaded. On older 1.10.z images this can
+# duplicate a built-in provider; keep enabled for 2.1 test day.
+- package: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-auth-backend-module-oidc-provider:bs_1.54.9__0.4.20"
+  disabled: false
+- package: "oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-catalog-backend-module-keycloak:bs_1.54.9__3.23.1"
   disabled: false
   pluginConfig:
     catalog:

@@ -1,71 +1,110 @@
-# Disable catalog index entries that lack NFS support or have broken images
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-homepage:1.11.0--1.17.0
+# Disable catalog-index packages via {{inherit}} (merge with included defaults;
+# stale tags/digests create Duplicate OCI plugin errors on install).
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-homepage:{{inherit}}
   disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-global-header@sha256:e0bf0acc1570c513ccd9bc38846ef47ce06f49c93b4d332506998ff1b7f6c04b
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-homepage-backend:{{inherit}}
   disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-quickstart@sha256:11b3a3fcb13c5dfe9572a163d80cb8afd34bca27a0a844a472d9e9b5f35a6162
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-global-header:{{inherit}}
   disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-adoption-insights@sha256:3f12d1d5864c8fa2a8904a0fd9d4fef7a6922abf7b0974821de7d30d7cf7b208
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-quickstart:{{inherit}}
   disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-analytics-module-adoption-insights@sha256:77bbb6be12bda357354315f9bb89ec2d1a3c67d7c5d4e7af33dcc0c97818cd5f
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-adoption-insights:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-adoption-insights-backend:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-analytics-module-adoption-insights:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-app-defaults:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-app-auth:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-app-integrations:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/backstage-plugin-techdocs:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/backstage-plugin-techdocs-backend:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/backstage-plugin-techdocs-module-addons-contrib:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/backstage-plugin-kubernetes:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/backstage-plugin-kubernetes-backend:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/backstage-community-plugin-topology:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-bulk-import:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-bulk-import-backend:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-extensions:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-extensions-backend:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-catalog-backend-module-extensions:{{inherit}}
   disabled: true
 
-# Core NFS plugins
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-defaults:bs_1.52.0__0.0.3
+# Core NFS plugins (Backstage 1.54.x / RHDH 2.1)
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-defaults:bs_1.54.9__1.11.0
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-auth:bs_1.52.0__0.1.1
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-auth:bs_1.54.9__1.2.0
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-integrations:bs_1.52.0__0.1.1
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-integrations:bs_1.54.9__1.1.1
   disabled: false
 
-# Global Header (v2.0.0 — NFS promoted to stable entry point)
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-global-header:bs_1.52.0__2.0.0
+# Global Header
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-global-header:bs_1.54.9__3.1.0
   disabled: false
 
 # Theme
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-theme:bs_1.52.0__1.0.2
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-theme:bs_1.54.9__1.4.0
   disabled: false
 
 # Quickstart
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-quickstart:bs_1.52.0__2.0.1
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-quickstart:bs_1.54.9__2.2.0
   disabled: false
 
 # Homepage
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-home:bs_1.52.0__0.9.7
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-home:bs_1.54.9__0.9.9
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-homepage:bs_1.52.0__1.17.1
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-homepage:bs_1.54.9__3.0.0
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-homepage-backend:bs_1.52.0__0.4.0
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-homepage-backend:bs_1.54.9__0.6.0
   disabled: false
 
 # Adoption Insights + Analytics
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-adoption-insights:bs_1.52.0__0.9.1
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-adoption-insights:bs_1.54.9__1.0.4
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-adoption-insights-backend:bs_1.52.0__0.9.1
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-adoption-insights-backend:bs_1.54.9__1.0.4
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-analytics-module-adoption-insights:bs_1.52.0__0.9.1
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-analytics-module-adoption-insights:bs_1.54.9__1.0.4
   disabled: false
 
-# Extensions
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-extensions:bs_1.52.0__0.19.1
+# Extensions (disable bundled OFS, enable GHCR NFS overlays)
+- package: ./dynamic-plugins/dist/red-hat-developer-hub-backstage-plugin-extensions
+  disabled: true
+- package: ./dynamic-plugins/dist/red-hat-developer-hub-backstage-plugin-extensions-backend-dynamic
+  disabled: true
+- package: ./dynamic-plugins/dist/red-hat-developer-hub-backstage-plugin-catalog-backend-module-extensions-dynamic
+  disabled: true
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-extensions:bs_1.54.9__1.0.1
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-extensions-backend:bs_1.52.0__0.19.1
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-extensions-backend:bs_1.54.9__1.0.1
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-catalog-backend-module-extensions:bs_1.52.0__0.19.1
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-catalog-backend-module-extensions:bs_1.54.9__1.0.1
   disabled: false
 
 # Bulk Import
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-bulk-import:bs_1.52.0__8.0.0
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-bulk-import:bs_1.54.9__9.1.1
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-bulk-import-backend:bs_1.52.0__8.0.0
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-bulk-import-backend:bs_1.54.9__9.1.1
   disabled: false
 
 # TechDocs
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-techdocs:bs_1.52.0__1.17.7
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-techdocs:bs_1.54.9__1.18.0
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-techdocs-backend:bs_1.52.0__2.2.1
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-techdocs-backend:bs_1.54.9__2.2.4
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-search-backend-module-techdocs:bs_1.52.0__0.4.15
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-search-backend-module-techdocs:bs_1.54.9__0.4.17
   disabled: false
 
 # Kubernetes (disable catalog index, enable GHCR)
@@ -73,27 +112,27 @@
   disabled: true
 - package: ./dynamic-plugins/dist/backstage-plugin-kubernetes-backend-dynamic
   disabled: true
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-kubernetes:bs_1.52.0__0.12.20
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-kubernetes:bs_1.54.9__0.12.22
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-kubernetes-backend:bs_1.52.0__0.21.5
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-kubernetes-backend:bs_1.54.9__0.21.10
   disabled: false
 
 # Tekton
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-tekton:bs_1.52.0__3.41.0
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-tekton:bs_1.54.9__4.0.5
   disabled: false
 
 # Topology
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-topology:bs_1.52.0__2.16.0
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-topology:bs_1.54.9__3.0.1
   disabled: false
 
 # ACR (Azure Container Registry)
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-acr:bs_1.52.0__1.27.0
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-acr:bs_1.54.9__1.28.1
   disabled: false
 
 # Quay
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-quay-backend:bs_1.52.0__1.17.0
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-quay-backend:bs_1.54.9__1.18.1
   disabled: true # requires quay configuration in app-config
 
 # Nexus Repository Manager
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-nexus-repository-manager:bs_1.52.0__1.26.0
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-nexus-repository-manager:bs_1.54.9__1.27.4
   disabled: false

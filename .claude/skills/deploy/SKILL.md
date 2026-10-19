@@ -243,7 +243,7 @@ catalog:
         realm: "${KEYCLOAK_REALM}"
 ```
 
-All `${VAR}` placeholders are substituted at runtime. Variables come from: Keycloak deploy script (auto-set: `KEYCLOAK_*`, `RHDH_BASE_URL`), Vault secrets (PR deployments), or `.env` file (local deployments). To add a new variable: define it in `config/rhdh-secrets.yaml`, then reference it in app-config as `${VAR_NAME}`.
+All `${VAR}` placeholders are substituted at runtime. Variables come from: Keycloak deploy script (auto-set: `KEYCLOAK_*`, `RHDH_BASE_URL`); Prow-injected Vault secrets when `OPENSHIFT_CI=true` (PR deployments — this repo does not call the Vault CLI); or the local `.env` file. Local `deploy.sh` always runs `source .env` when not in CI — the file must exist (copy from `.env.example`) or deploy fails; there is no local Vault fallback. Empty `KEYCLOAK_*` placeholders in `.env` are fine. To add a new variable: define it in `config/rhdh-secrets.yaml`, then reference it in app-config as `${VAR_NAME}`.
 
 #### Common app-config Modifications
 

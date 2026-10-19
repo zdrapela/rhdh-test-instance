@@ -17,13 +17,14 @@ Users deploy test instances by commenting on PRs:
 ```
 
 - `install-type`: `helm` or `operator`
-- `version`: `1.11`, `1.9-190-CI`, `next`
+- `version`: `2.1`, `2.1-128-CI`, `1.11`, `next`
 - `duration`: optional cleanup timer (e.g., `4h`, `2.5h`; default `3h`)
 
 Examples:
 ```
+/test deploy helm 2.1 4h
 /test deploy helm next 4h
-/test deploy operator 1.11 2.5h
+/test deploy operator 2.1 2.5h
 ```
 
 The bot responds with RHDH URL, OpenShift console link, and cluster credentials (from Vault). Users can test custom configurations by modifying config files in the PR branch before deploying. Max two concurrent instances.
@@ -37,7 +38,12 @@ Prow job status: https://prow.ci.openshift.org/?repo=redhat-developer%2Frhdh-tes
 ```bash
 # Helm deployment (primary method) — Keycloak OIDC is always auto-configured
 make deploy-helm
-make deploy-helm VERSION=1.11 NAMESPACE=rhdh
+make deploy-helm VERSION=2.1 NAMESPACE=rhdh
+
+# 2.1 test day (NFS-focused)
+make deploy-helm VERSION=2.1 WITH=nfs
+make deploy-helm VERSION=2.1 WITH=nfs,lightspeed,scorecard,rbac
+make deploy-helm VERSION=2.1 WITH=all WITHOUT=orchestrator
 
 # Helm with optional components (comma-separated)
 make deploy-helm WITH=nfs
@@ -48,15 +54,16 @@ make deploy-helm WITH=all
 make deploy-helm WITH=all WITHOUT=orchestrator,lightspeed
 
 # Helm with specific version + namespace + components
-make deploy-helm VERSION=1.11 NAMESPACE=team-a WITH=nfs,lightspeed,scorecard,rbac
+make deploy-helm VERSION=2.1 NAMESPACE=team-a WITH=nfs,lightspeed,scorecard,rbac
 make deploy-helm VERSION=next WITH=all WITHOUT=orchestrator
 
 # Helm with PR image
 make deploy-helm RHDH_IMAGE=quay.io/rhdh-community/rhdh:pr-1234 WITH=nfs
 
 # Operator deployment (requires install-operator first)
-make install-operator VERSION=1.9
-make deploy-operator VERSION=1.9 WITH=nfs
+make install-operator VERSION=2.1
+make deploy-operator VERSION=2.1 WITH=nfs
+make deploy-operator VERSION=2.1 WITH=nfs,lightspeed,scorecard,rbac
 ```
 
 ### Shared Keycloak
@@ -89,7 +96,7 @@ make url       # Print the RHDH portal URL
 | Variable | Default | Description |
 |---|---|---|
 | `NAMESPACE` | `rhdh` | OpenShift namespace for RHDH |
-| `VERSION` | `next` | RHDH version (supports `1.11`, `1.9-190-CI`, `next`) |
+| `VERSION` | `next` | RHDH version (supports `2.1`, `2.1-128-CI`, `1.11`, `next`) |
 | `WITH` | (empty) | Comma-separated optional components: `nfs`, `lightspeed`, `scorecard`, `orchestrator`, `rbac`, or `all` |
 | `WITHOUT` | (empty) | Comma-separated components to exclude (use with `WITH=all` to skip specific ones) |
 | `RHDH_IMAGE` | (empty) | Override RHDH container image (e.g., `quay.io/rhdh-community/rhdh:pr-1234`) |
@@ -102,7 +109,7 @@ make url       # Print the RHDH portal URL
 ```
 deploy.sh (entry point)
 ├── Parses args: method (helm/operator), version, namespace, --with <components>, --without <components>
-├── Sources secrets from .env (local) or Vault (CI)
+├── Sources .env (local; required) or uses CI-injected Vault secrets (OPENSHIFT_CI=true)
 ├── Deploys shared Keycloak via scripts/plugins/config-keycloak-plugin.sh (into KEYCLOAK_NS)
 │   └── Auto-fixes KC_HOSTNAME if cluster has changed (pool rotation)
 ├── Creates namespace and app-config ConfigMap from config/
@@ -138,7 +145,7 @@ deploy.sh (entry point)
 4. `config/app-config-rhdh.yaml` configures RHDH with OIDC auth pointing to the shared Keycloak and catalog entity locations from GitHub.
 5. For Helm: the RHDH chart is installed with dynamic plugins config. For Operator: a Backstage CR is applied referencing the ConfigMaps.
 6. Optional components are enabled via `--with <components>` (comma-separated):
-   - `nfs` — NFS GHCR plugins merged from `config/nfs-dynamic-plugins.yaml` (global header, homepage, theme, extensions, bulk import, TechDocs, Kubernetes, Tekton, Topology, ACR, Nexus, etc.), `app-next` package enabled, `nfs-app-config.yaml` applied as extra ConfigMap
+   - `nfs` — NFS GHCR plugins merged from `config/nfs-dynamic-plugins.yaml` (global header, homepage, theme, extensions, bulk import, TechDocs, Kubernetes, Tekton, Topology, ACR, Nexus, etc.), `nfs-app-config.yaml` applied as extra ConfigMap (RHDH 2.1+ default `app` is already NFS; do not set `APP_CONFIG_app_packageName=app-next`)
    - `orchestrator` — orchestrator plugins merged from `config/orchestrator-dynamic-plugins.yaml`, serverless operators installed
    - `lightspeed` — intelligent-assistant plugins merged from `config/lightspeed-dynamic-plugins.yaml`. If LLM provider credentials exist (e.g., `ENABLE_OPENAI=true`), LCS sidecar is deployed; otherwise UI loads but shows "Could not load models"
    - `scorecard` — scorecard plugins merged from `config/scorecard-dynamic-plugins.yaml`
@@ -148,9 +155,9 @@ deploy.sh (entry point)
 
 ### Secrets
 
-- **PR deployments (primary):** secrets pulled automatically from Vault at `vault.ci.openshift.org` under `selfservice/rhdh-test-instance/`
-- **Local deployments:** secrets loaded from `.env` file (copy `.env.example` to `.env`); Vault is used when `.env` is absent
-- **Lightspeed credentials:** `ENABLE_OPENAI`, `OPENAI_API_KEY`, etc. in `.env` — see `.env.example` for all supported providers
+- **PR deployments (primary):** when `OPENSHIFT_CI=true`, `deploy.sh` skips `.env` and uses secrets injected by Prow from Vault at `vault.ci.openshift.org` under `selfservice/rhdh-test-instance/`. This repo does not call the Vault CLI.
+- **Local deployments:** `deploy.sh` always runs `source .env` when not in CI. Copy `.env.example` to `.env` first (file must exist or deploy fails). Empty `KEYCLOAK_*` placeholders are fine — Keycloak setup writes real values into `rhdh-secrets`. There is no local Vault fallback.
+- **Lightspeed credentials:** `ENABLE_OPENAI`, `OPENAI_API_KEY`, etc. in `.env` — see `.env.example` for all supported providers. Only needed for `WITH=lightspeed`.
 
 ## Required CLI Tools
 

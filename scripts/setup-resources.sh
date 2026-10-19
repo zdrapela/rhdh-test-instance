@@ -41,19 +41,33 @@ create_rhdh_secrets() {
   : "${RHDH_BASE_URL:?RHDH_BASE_URL must be set before setup-resources.sh runs}"
 
   if oc get secret rhdh-secrets --namespace="${NAMESPACE}" &>/dev/null; then
-    # Secret already exists — only update RHDH_BASE_URL so the URL stays
-    # current without rotating SESSION_SECRET or clearing plugin-owned keys.
+    # Secret already exists — refresh RHDH_BASE_URL and ensure MCP_TOKEN /
+    # BACKEND_SECRET are non-empty (backend.auth.externalAccess requires them).
+    local mcp_token="${MCP_TOKEN:-}"
+    if [[ -z "${mcp_token}" ]]; then
+      mcp_token=$(oc get secret rhdh-secrets -n "${NAMESPACE}" -o jsonpath='{.data.MCP_TOKEN}' 2>/dev/null \
+        | (base64 -d 2>/dev/null || true))
+    fi
+    : "${mcp_token:=mcp-test-token}"
+    local backend_secret
+    backend_secret=$(oc get secret rhdh-secrets -n "${NAMESPACE}" -o jsonpath='{.data.BACKEND_SECRET}' 2>/dev/null \
+      | (base64 -d 2>/dev/null || true))
+    if [[ -z "${backend_secret}" ]]; then
+      backend_secret=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
+    fi
     oc patch secret rhdh-secrets -n "${NAMESPACE}" --type=merge \
-      -p "{\"stringData\":{\"RHDH_BASE_URL\":\"${RHDH_BASE_URL}\"}}"
-    echo "rhdh-secrets already exists — updated RHDH_BASE_URL only."
+      -p "{\"stringData\":{\"RHDH_BASE_URL\":\"${RHDH_BASE_URL}\",\"MCP_TOKEN\":\"${mcp_token}\",\"BACKEND_SECRET\":\"${backend_secret}\"}}"
+    echo "rhdh-secrets already exists — updated RHDH_BASE_URL / MCP_TOKEN / BACKEND_SECRET."
   else
-    # Generate a random session secret at deploy time so it is never hardcoded.
-    local session_secret
+    # Generate random secrets at deploy time so they are never hardcoded.
+    local session_secret backend_secret
     session_secret=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
+    backend_secret=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32)
 
     oc create secret generic rhdh-secrets \
       --from-literal=RHDH_BASE_URL="${RHDH_BASE_URL}" \
       --from-literal=SESSION_SECRET="${session_secret}" \
+      --from-literal=BACKEND_SECRET="${backend_secret}" \
       --from-literal=KEYCLOAK_BASE_URL="${KEYCLOAK_BASE_URL:-}" \
       --from-literal=KEYCLOAK_METADATA_URL="${KEYCLOAK_METADATA_URL:-}" \
       --from-literal=KEYCLOAK_LOGIN_REALM="${KEYCLOAK_LOGIN_REALM:-}" \
@@ -62,7 +76,7 @@ create_rhdh_secrets() {
       --from-literal=KEYCLOAK_CLIENT_SECRET="${KEYCLOAK_CLIENT_SECRET:-}" \
       --from-literal=LIGHTHOUSE_URL="${LIGHTHOUSE_URL:-}" \
       --from-literal=LIGHTHOUSE_SVC_URL="${LIGHTHOUSE_SVC_URL:-}" \
-      --from-literal=MCP_TOKEN="${MCP_TOKEN:-}" \
+      --from-literal=MCP_TOKEN="${MCP_TOKEN:-mcp-test-token}" \
       --namespace="${NAMESPACE}"
 
     echo "rhdh-secrets created!"

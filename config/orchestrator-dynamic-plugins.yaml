@@ -1,19 +1,21 @@
-# Disable catalog index orchestrator entries
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator-backend:1.11.0--8.9.5
+# Disable catalog-index orchestrator packages via {{inherit}} (merge, don't duplicate).
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator-backend:{{inherit}}
   disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator:1.11.0--5.7.13
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator:{{inherit}}
   disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator-form-widgets:1.11.0--1.10.8
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator-form-widgets:{{inherit}}
   disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-scaffolder-backend-module-orchestrator:1.11.0--1.5.4
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-scaffolder-backend-module-orchestrator:{{inherit}}
+  disabled: true
+- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator-backend-module-loki:{{inherit}}
   disabled: true
 
-# NFS-compatible Orchestrator plugins from GHCR
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-orchestrator-backend:bs_1.52.0__8.12.1
+# NFS-compatible Orchestrator plugins from GHCR (RHDH 2.1 / Backstage 1.54.x)
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-orchestrator-backend:bs_1.54.9__8.13.1
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-orchestrator:bs_1.52.0__6.0.0
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-orchestrator:bs_1.54.9__6.2.1
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-orchestrator-form-widgets:bs_1.52.0__2.0.0
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-orchestrator-form-widgets:bs_1.54.9__2.2.0
   disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scaffolder-backend-module-orchestrator:bs_1.52.0__1.7.2
+- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scaffolder-backend-module-orchestrator:bs_1.54.9__1.8.1
   disabled: false

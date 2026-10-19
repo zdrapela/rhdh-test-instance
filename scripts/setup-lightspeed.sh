@@ -3,7 +3,7 @@
 # Lightspeed setup for RHDH
 #
 # Detects configured LLM providers and creates the Secret needed by the
-# Helm chart's built-in LCS sidecar (global.lightspeed.enabled=true).
+# Helm chart's built-in LCS sidecar (intelligentAssistant.existingSecret).
 #
 # The sidecar itself is deployed by the Helm chart — no custom patching needed.
 #
@@ -59,117 +59,63 @@ setup_lightspeed_secret() {
     fi
 }
 
-# Patch the Helm-generated app-config ConfigMap to include MCP static token auth.
-# The Helm chart creates `redhat-developer-hub-app-config` which sets
-# backend.auth.externalAccess with only the legacy type. Since Backstage replaces
-# arrays (does not merge), this overwrites our custom backend.auth entries in
-# app-config-rhdh.yaml. We patch the Helm ConfigMap post-install to add both the
-# legacy entry AND the static MCP token entry.
-patch_helm_appconfig_for_mcp() {
-    echo ""
-    echo "=============================================="
-    echo "MCP — Patching Helm app-config for static token auth"
-    echo "=============================================="
+# MCP static token auth lives in config/app-config-rhdh.yaml (extraAppConfig).
+# Do not kubectl-patch the Helm app-config ConfigMap — that fights Helm SSA.
 
-    local cm_name="redhat-developer-hub-app-config"
-    if ! oc get configmap "${cm_name}" -n "${NAMESPACE}" &>/dev/null; then
-        echo "Warning: ConfigMap ${cm_name} not found. Skipping MCP patch."
-        return 0
-    fi
-
-    # The Helm chart stores config under "app-config.yaml" (dots in key name
-    # break jsonpath, so use python to extract)
-    local existing_yaml
-    existing_yaml=$(oc get configmap "${cm_name}" -n "${NAMESPACE}" \
-        -o json | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('app-config.yaml',''))")
-
-    local patch_file
-    patch_file=$(mktemp)
-
-    # Replace the backend.auth section using Python string manipulation (stdlib only)
-    echo "${existing_yaml}" \
-      | python3 -c "
-import sys, re
-
-content = sys.stdin.read()
-
-auth_replacement = '''  auth:
-    keys:
-      - secret: '\${BACKEND_SECRET}'
-    externalAccess:
-      - type: legacy
-        options:
-          secret: '\${BACKEND_SECRET}'
-          subject: legacy-default-config
-      - type: static
-        options:
-          token: '\${MCP_TOKEN}'
-          subject: mcp-clients'''
-
-# Match the auth: block under backend: up to the next peer-level key
-pattern = r'(  auth:\n(?:    .*\n)*)'
-match = re.search(pattern, content)
-if match:
-    content = content[:match.start()] + auth_replacement + '\n' + content[match.end():]
-else:
-    content = content.replace('backend:\n', 'backend:\n' + auth_replacement + '\n', 1)
-
-sys.stdout.write(content)
-" > "${patch_file}"
-
-    # Preserve the default-app-config.yaml key if it exists
-    local default_config_file
-    default_config_file=$(mktemp)
-    oc get configmap "${cm_name}" -n "${NAMESPACE}" \
-        -o json | python3 -c "import sys,json; print(json.load(sys.stdin)['data'].get('default-app-config.yaml',''))" \
-        > "${default_config_file}" 2>/dev/null || true
-
-    local from_file_args=("--from-file=app-config.yaml=${patch_file}")
-    if [[ -s "${default_config_file}" ]]; then
-        from_file_args+=("--from-file=default-app-config.yaml=${default_config_file}")
-    fi
-
-    oc create configmap "${cm_name}" \
-        "${from_file_args[@]}" \
-        --namespace="${NAMESPACE}" \
-        --dry-run=client -o yaml | oc apply -f - --namespace="${NAMESPACE}"
-
-    rm -f "${patch_file}" "${default_config_file}"
-    echo "Helm app-config patched with MCP static token auth."
-}
-
-# Patch the LCS config to restrict visible OpenAI models
+# Patch the LCS / IA stack config to restrict visible OpenAI models (when present).
+# RHDH 2.1 chart names the ConfigMap *-ia-stack with key lightspeed-stack.yaml;
+# older charts used *-lightspeed-config / config.yaml.
 patch_lcs_allowed_models() {
     echo ""
     echo "=============================================="
     echo "LCS — Patching allowed_models for OpenAI"
     echo "=============================================="
 
-    local cm_name="redhat-developer-hub-lightspeed-config"
-    if ! oc get configmap "${cm_name}" -n "${NAMESPACE}" &>/dev/null; then
-        echo "LCS config ConfigMap not found. Skipping allowed_models patch."
-        return 0
-    fi
-
     if [[ "${ENABLE_OPENAI:-}" != "true" ]]; then
         echo "OpenAI not enabled. Skipping allowed_models patch."
         return 0
     fi
 
-    local config_yaml
-    config_yaml=$(oc get configmap "${cm_name}" -n "${NAMESPACE}" \
-        -o jsonpath='{.data.config\.yaml}')
+    local cm_name="" data_key=""
+    for candidate in \
+        "redhat-developer-hub-ia-stack:lightspeed-stack.yaml" \
+        "redhat-developer-hub-lightspeed-config:config.yaml"; do
+        local name="${candidate%%:*}" key="${candidate##*:}"
+        if oc get configmap "${name}" -n "${NAMESPACE}" &>/dev/null; then
+            cm_name="${name}"
+            data_key="${key}"
+            break
+        fi
+    done
 
-    # Only patch if allowed_models is not already set
+    if [[ -z "${cm_name}" ]]; then
+        echo "LCS/IA stack ConfigMap not found. Skipping allowed_models patch."
+        return 0
+    fi
+
+    local config_yaml
+    config_yaml=$(oc get configmap "${cm_name}" -n "${NAMESPACE}" -o json \
+        | python3 -c "import sys,json; d=json.load(sys.stdin)['data']; print(d.get('${data_key}',''))")
+
+    if [[ -z "${config_yaml}" ]]; then
+        echo "ConfigMap ${cm_name} has no key ${data_key}. Skipping."
+        return 0
+    fi
+
+    # Only patch if allowed_models is not already set and the legacy remote::openai
+    # block exists (2.1 default stack uses api_key_env and may omit this block).
     if echo "${config_yaml}" | grep -q "allowed_models"; then
         echo "allowed_models already configured. Skipping."
+        return 0
+    fi
+    if ! echo "${config_yaml}" | grep -q "provider_type: remote::openai"; then
+        echo "No remote::openai provider block in ${cm_name}. Skipping allowed_models patch."
         return 0
     fi
 
     local patch_file
     patch_file=$(mktemp)
 
-    # Add allowed_models under the OpenAI provider's config block (stdlib only)
     echo "${config_yaml}" \
       | python3 -c "
 import sys, re
@@ -190,7 +136,7 @@ sys.stdout.write(content)
 " > "${patch_file}"
 
     oc create configmap "${cm_name}" \
-        --from-file="config.yaml=${patch_file}" \
+        --from-file="${data_key}=${patch_file}" \
         --namespace="${NAMESPACE}" \
         --dry-run=client -o yaml | oc apply -f - --namespace="${NAMESPACE}"
 

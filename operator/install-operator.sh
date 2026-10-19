@@ -56,11 +56,24 @@ oc patch configs.imageregistry.operator.openshift.io/cluster --patch '{"spec":{"
 curl -LO "$SCRIPT_URL"
 chmod +x install-rhdh-catalog-source.sh
 
-# Fix sed -i for macOS (GNU sed uses -i'suffix', BSD/macOS sed needs -i '' 'expr')
+# Portable in-place sed (GNU: sed -i; BSD/macOS: sed -i '')
+_sed_inplace() {
+    if [[ "$(uname)" == "Darwin" ]]; then
+        sed -i '' "$@"
+    else
+        sed -i "$@"
+    fi
+}
+
+# Fix sed -i for macOS (GNU sed uses -i[SUFFIX]; BSD/macOS sed needs -i '')
+# Must cover: sed -i -f FILE (image-ref replacements), sed -i '…', sed -i "…"
+# Quote patches require the char after the opening quote so we don't re-match
+# an already-inserted empty suffix (sed -i '' …).
 if [[ "$(uname)" == "Darwin" ]]; then
     echo "Patching install script for macOS sed compatibility..."
-    sed -i '' "s/sed -i 's/sed -i '' 's/g" install-rhdh-catalog-source.sh
-    sed -i '' 's/sed -i "s/sed -i "" "s/g' install-rhdh-catalog-source.sh
+    _sed_inplace -E "s/sed -i ([^'\"])/sed -i '' \1/g" install-rhdh-catalog-source.sh
+    _sed_inplace -E "s/sed -i '([^'])/sed -i '' '\1/g" install-rhdh-catalog-source.sh
+    _sed_inplace -E 's/sed -i "([^"])/sed -i "" "\1/g' install-rhdh-catalog-source.sh
 fi
 
 # Fix hardcoded 'kubeadmin' username — on ARO clusters the admin user is
@@ -69,18 +82,14 @@ fi
 CURRENT_USER=$(oc whoami)
 if [[ "$CURRENT_USER" != "kubeadmin" ]]; then
     echo "Patching install script for non-kubeadmin cluster (user: ${CURRENT_USER})..."
-    sed -i '' -e 's/skopeo login -u kubeadmin/skopeo login -u openshift/g' install-rhdh-catalog-source.sh
-    sed -i '' -e 's/--docker-username=kubeadmin/--docker-username=openshift/g' install-rhdh-catalog-source.sh
+    _sed_inplace -e 's/skopeo login -u kubeadmin/skopeo login -u openshift/g' install-rhdh-catalog-source.sh
+    _sed_inplace -e 's/--docker-username=kubeadmin/--docker-username=openshift/g' install-rhdh-catalog-source.sh
     chmod +x install-rhdh-catalog-source.sh
 fi
 
 # Override the hardcoded namespace so the operator lives in a dedicated namespace
 # that won't be deleted when RHDH deployment namespaces are removed.
-if [[ "$(uname)" == "Darwin" ]]; then
-    sed -i '' "s/NAMESPACE_SUBSCRIPTION=\"rhdh-operator\"/NAMESPACE_SUBSCRIPTION=\"${OPERATOR_NAMESPACE}\"/" install-rhdh-catalog-source.sh
-else
-    sed -i "s/NAMESPACE_SUBSCRIPTION=\"rhdh-operator\"/NAMESPACE_SUBSCRIPTION=\"${OPERATOR_NAMESPACE}\"/" install-rhdh-catalog-source.sh
-fi
+_sed_inplace "s/NAMESPACE_SUBSCRIPTION=\"rhdh-operator\"/NAMESPACE_SUBSCRIPTION=\"${OPERATOR_NAMESPACE}\"/" install-rhdh-catalog-source.sh
 
 ./install-rhdh-catalog-source.sh ${version_arg} --install-operator rhdh
 rm install-rhdh-catalog-source.sh
