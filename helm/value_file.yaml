@@ -1,4 +1,4 @@
-# RHDH 2.1+ chart values (no upstream.backstage subchart).
+# RHDH 2.1 chart values (no upstream.backstage subchart).
 # Dynamic plugins are supplied at install time by helm/deploy.sh from the
 # cluster ConfigMap (or config/dynamic-plugins.yaml).
 # extraAppConfig is built dynamically by helm/deploy.sh based on enabled components.
@@ -17,16 +17,19 @@ extraEnvFrom:
   - secretRef:
       name: rhdh-secrets
 
+auth:
+  backend:
+    existingSecretRef:
+      name: rhdh-secrets
+      key: BACKEND_SECRET
+
 extraEnv:
   - name: NODE_TLS_REJECT_UNAUTHORIZED
     value: '0'
   - name: SEGMENT_TEST_MODE
     value: 'true'
-  - name: BACKSTAGE_LOG_LEVEL
+  - name: LOG_LEVEL
     value: debug
-  # Harmless without NFS; required for Scalprum dynamic frontend plugins.
-  - name: ENABLE_STANDARD_MODULE_FEDERATION
-    value: 'true'
 
 # RBAC policy + catalog entity ConfigMaps (created by setup-resources.sh)
 extraVolumeMounts:
@@ -55,7 +58,7 @@ extraVolumes:
             name: resources-config-map
             optional: true
 
-# Larger ephemeral volume for NFS-heavy plugin sets
+# Keep the existing ephemeral plugin storage allocation.
 dynamicPlugins:
   volume:
     type: ephemeral

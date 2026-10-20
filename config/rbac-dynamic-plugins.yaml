@@ -1,6 +1,6 @@
-# RBAC frontend (NFS-compatible OCI overlay for RHDH 2.1)
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-rbac:bs_1.54.9__2.3.1
-  disabled: false
+# RBAC frontend from the catalog.
+- package: ref://backstage-community-plugin-rbac
+  enabled: true
 
 # RBAC backend — baked into RHDH backend as a direct dependency
 # (see https://github.com/redhat-developer/rhdh/blob/main/packages/backend/package.json)

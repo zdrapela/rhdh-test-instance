@@ -1,21 +1,21 @@
 # Scorecard frontend
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard:bs_1.54.9__4.4.1
-  disabled: false
+- package: ref://red-hat-developer-hub-backstage-plugin-scorecard
+  enabled: true
 
 # Scorecard backend
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend:bs_1.54.9__4.4.1
-  disabled: false
+- package: ref://red-hat-developer-hub-backstage-plugin-scorecard-backend
+  enabled: true
 
 # Scorecard backend modules
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-sonarqube:bs_1.54.9__4.4.1
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-jira:bs_1.54.9__4.4.1
-  disabled: true # requires jira configuration
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-dependabot:bs_1.54.9__1.1.3
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-github:bs_1.54.9__4.4.1
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-filecheck:bs_1.54.9__1.1.3
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scorecard-backend-module-openssf:bs_1.54.9__2.0.0
-  disabled: false
+- package: ref://red-hat-developer-hub-backstage-plugin-scorecard-backend-module-sonarqube
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-scorecard-backend-module-jira
+  enabled: false # requires jira configuration
+- package: ref://red-hat-developer-hub-backstage-plugin-scorecard-backend-module-dependabot
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-scorecard-backend-module-github
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-scorecard-backend-module-filecheck
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-scorecard-backend-module-openssf
+  enabled: true

@@ -1,16 +1,18 @@
 NAMESPACE ?= rhdh
-VERSION ?= next
+VERSION ?= 2.1
 WITH ?=
 WITHOUT ?=
 PLUGINS ?=
 USE_CONTAINER ?= false
 CATALOG_INDEX_TAG ?=
+CATALOG_INDEX_IMAGE ?=
 RHDH_IMAGE ?=
 RUNNER_IMAGE ?= quay.io/rhdh-community/rhdh-e2e-runner:main
 OPERATOR_NAMESPACE ?= rhdh-operator-system
 KEYCLOAK_NS ?= rhdh-keycloak
 
 export CATALOG_INDEX_TAG
+export CATALOG_INDEX_IMAGE
 export RHDH_IMAGE
 export OPERATOR_NAMESPACE
 export KEYCLOAK_NS
@@ -142,6 +144,8 @@ endif
 		-v $(CURDIR):/workspace:z \
 		-w /workspace \
 		-e KUBECONFIG=/tmp/.kube/config \
+		-e CATALOG_INDEX_IMAGE -e CATALOG_INDEX_TAG -e RHDH_IMAGE \
+		-e OPERATOR_NAMESPACE -e KEYCLOAK_NS \
 		$(RUNNER_IMAGE) \
 		bash -c 'mkdir -p /tmp/.kube && oc login --token=$(K8S_CLUSTER_TOKEN) --server=$(K8S_CLUSTER_URL) --insecure-skip-tls-verify=true && source .env && $(CMD)'
 

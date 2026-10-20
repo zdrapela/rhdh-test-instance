@@ -1,19 +1,19 @@
 # MCP Actions backend (RHDH 2.1 / Backstage 1.54.x)
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-mcp-actions-backend:bs_1.54.9__0.2.1!backstage-plugin-mcp-actions-backend
-  disabled: false
+- package: ref://backstage-plugin-mcp-actions-backend
+  enabled: true
   pluginConfig: {}
 
 # MCP extras - Scaffolder
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-scaffolder-mcp-extras:bs_1.54.9__0.4.4!red-hat-developer-hub-backstage-plugin-scaffolder-mcp-extras
-  disabled: false
+- package: ref://red-hat-developer-hub-backstage-plugin-scaffolder-mcp-extras
+  enabled: true
   pluginConfig: {}
 
 # MCP extras - Software Catalog
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-software-catalog-mcp-extras:bs_1.54.9__0.2.5!red-hat-developer-hub-backstage-plugin-software-catalog-mcp-extras
-  disabled: false
+- package: ref://red-hat-developer-hub-backstage-plugin-software-catalog-mcp-extras
+  enabled: true
   pluginConfig: {}
 
 # MCP extras - TechDocs
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-techdocs-mcp-extras:bs_1.54.9__0.2.6!red-hat-developer-hub-backstage-plugin-techdocs-mcp-extras
-  disabled: false
+- package: ref://red-hat-developer-hub-backstage-plugin-techdocs-mcp-extras
+  enabled: true
   pluginConfig: {}

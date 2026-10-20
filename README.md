@@ -10,7 +10,7 @@ This project provides automated deployment scripts and configuration files to se
 
 - 🤖 **GitHub PR Integration** with `/test` command for on-demand deployments
 - 📦 **Multiple Install Types**: Support for both Helm and Operator installation methods
-- 🔄 **Flexible Version Support**: Deploy any RHDH version (`2.1`, `2.1-128-CI`, `next`, `1.11`)
+- 🔄 **RHDH 2.1 Deployments**: Deploy the latest 2.1 chart or a specific 2.1 build (`2.1`, `2.1-128-CI`)
 - 🔐 **Shared Keycloak OIDC**: Automatic Keycloak setup in a shared namespace — all instances share one Keycloak
 - 🧩 **Optional Components**: Enable NFS, Lightspeed, Scorecard, Orchestrator, RBAC via `WITH=`
 - 🌐 **Cluster Information Sharing**: Automatic sharing of deployment URLs, OpenShift console access, and cluster credentials
@@ -41,10 +41,10 @@ The bot supports flexible deployment commands directly from PR comments:
 **Examples:**
 
 ```bash
-/test deploy helm 1.7 4h          # Deploy RHDH 1.7 with Helm, cleanup after 4 hours
-/test deploy operator 1.6 2.5h     # Deploy RHDH 1.6 with Operator, cleanup after 2.5 hours
-/test deploy helm 1.7            # Deploy latest CI version with Helm with defaut duration 3h
-/test deploy operator 1.7-98-CI   # Deploy specific CI build with Operator
+/test deploy helm 2.1 4h           # Deploy RHDH 2.1 with Helm, cleanup after 4 hours
+/test deploy operator 2.1 2.5h     # Deploy RHDH 2.1 with Operator, cleanup after 2.5 hours
+/test deploy helm 2.1              # Deploy the latest 2.1 chart with the default 3h duration
+/test deploy operator 2.1-128-CI   # Select the 2.1 operator release line
 ```
 
 ### How to Use PR Integration
@@ -52,7 +52,7 @@ The bot supports flexible deployment commands directly from PR comments:
 1. **Comment on any PR on rhdh-test-instance repo:**
 
    ```bash
-   /test deploy helm 1.7 4h
+    /test deploy helm 2.1 4h
    ```
 
 ### Feedback Loop
@@ -60,7 +60,7 @@ The bot supports flexible deployment commands directly from PR comments:
 The bot provides comprehensive feedback through PR comments for eg:
 
 ```text
-🚀 Deployed RHDH version: 1.7 using helm
+🚀 Deployed RHDH version: 2.1 using helm
 
 🌐 RHDH URL: https://redhat-developer-hub-rhdh.apps.rhdh-4-17-us-east-2-kz69l.rhdh-qe.devcluster.openshift.com
 
@@ -89,7 +89,7 @@ Users can deploy different configuration flavors by:
 2. **Using bot commands** to deploy the PR's configuration:
 
    ```bash
-   /test deploy helm 1.7 2h
+    /test deploy helm 2.1 2h
    ```
 
 ## Local Deployment
@@ -103,6 +103,7 @@ For local development and testing environments, you can deploy RHDH directly to 
 
 - `oc` CLI logged into your OpenShift cluster
 - `helm` CLI installed
+- Bash 4.3+, `curl`, `jq`, [Mike Farah's `yq` v4](https://github.com/mikefarah/yq), `skopeo`, and Python 3
 - `make` installed
 - `.env` file configured (copy from `.env.example`) — needed for Lightspeed credentials and other optional secrets
 
@@ -115,11 +116,12 @@ For local development and testing environments, you can deploy RHDH directly to 
    cd rhdh-test-instance
    ```
 
-2. **Configure environment (optional):**
+2. **Configure environment:**
 
    ```bash
    cp .env.example .env
-   # Edit .env to add Lightspeed API keys or other credentials
+    # Edit .env to add Lightspeed API keys or other credentials
+    # Set CATALOG_INDEX_IMAGE to your supplied catalog for optional packages
    ```
 
 3. **Deploy RHDH:**
@@ -161,7 +163,7 @@ make deploy-helm WITH=all WITHOUT=orchestrator,lightspeed
 make deploy-helm VERSION=2.1 WITH=nfs,lightspeed
 make deploy-helm VERSION=2.1 NAMESPACE=team-a WITH=nfs,lightspeed,scorecard,rbac
 make deploy-helm VERSION=2.1-128-CI WITH=nfs
-make deploy-helm VERSION=next WITH=all WITHOUT=orchestrator
+make deploy-helm VERSION=2.1 WITH=all WITHOUT=orchestrator
 
 # With a custom RHDH image
 make deploy-helm RHDH_IMAGE=quay.io/rhdh-community/rhdh:pr-1234 WITH=nfs
@@ -220,13 +222,14 @@ All make commands accept these variables:
 | Variable            | Default                                       | Description                                                                   |
 | ------------------- | --------------------------------------------- | ----------------------------------------------------------------------------- |
 | `NAMESPACE`         | `rhdh`                                        | Target namespace for RHDH                                                     |
-| `VERSION`           | `next`                                        | RHDH version (`next`, `1.11`, `1.9-190-CI`)                                  |
+| `VERSION`           | `2.1`                                         | RHDH 2.1 release line, patch release, or CI chart build (`2.1-128-CI`)        |
 | `WITH`              | _(empty)_                                     | Comma-separated optional components: `nfs`, `lightspeed`, `scorecard`, `orchestrator`, `rbac`, or `all` |
 | `WITHOUT`           | _(empty)_                                     | Comma-separated components to exclude (use with `WITH=all` to skip specific ones) |
 | `PLUGINS`           | _(empty)_                                     | Infrastructure plugins to deploy/teardown (e.g. `keycloak,lighthouse`)        |
 | `KEYCLOAK_NS`       | `rhdh-keycloak`                               | Namespace for shared Keycloak (all RHDH instances share one Keycloak)         |
 | `RHDH_IMAGE`        | _(empty)_                                     | Override RHDH container image (e.g., `quay.io/rhdh-community/rhdh:pr-1234`)  |
-| `CATALOG_INDEX_TAG` | auto                                          | Catalog index image tag (defaults to major.minor from version, or `next`)     |
+| `CATALOG_INDEX_TAG` | `2.1`                                         | Tag for the primary RHDH catalog when no full image is supplied              |
+| `CATALOG_INDEX_IMAGE` | `quay.io/rhdh/plugin-catalog-index:2.1`       | Full supplied catalog image; takes precedence over `CATALOG_INDEX_TAG`       |
 | `USE_CONTAINER`     | `false`                                       | Set to `true` to run commands inside the e2e-runner container                 |
 | `RUNNER_IMAGE`      | `quay.io/rhdh-community/rhdh-e2e-runner:main` | Container image for `install-operator`                                       |
 
@@ -245,12 +248,12 @@ You can also use `deploy.sh` and `teardown.sh` directly:
 ```
 
 ```bash
-./deploy.sh helm next
-./deploy.sh helm next --with nfs,lightspeed
-./deploy.sh helm next --with all
-./deploy.sh helm next --with all --without orchestrator,lightspeed
-./deploy.sh helm 1.11 --namespace my-test --with nfs,scorecard
-./deploy.sh operator 1.9 --with orchestrator
+./deploy.sh helm 2.1
+./deploy.sh helm 2.1 --with nfs,lightspeed
+./deploy.sh helm 2.1 --with all
+./deploy.sh helm 2.1 --with all --without orchestrator,lightspeed
+./deploy.sh helm 2.1 --namespace my-test --with nfs,scorecard
+./deploy.sh operator 2.1 --with orchestrator
 ```
 
 **Teardown:**
@@ -288,7 +291,7 @@ https://redhat-developer-hub-<namespace>.<cluster-router-base>
 
 ### Application Configuration
 
-The main application configuration is stored in `config/app-config-rhdh.yaml` and contains base settings (URLs, CORS, i18n, auth, catalog). When NFS is enabled (`WITH=nfs`), additional configuration from `config/nfs-app-config.yaml` is applied, including `app.extensions`, `app.branding`, and `globalHeader` settings.
+The main application configuration is stored in `config/app-config-rhdh.yaml` and contains base settings (URLs, CORS, languages, auth, catalog and RBAC policy files). When NFS extras are enabled (`WITH=nfs`), `config/nfs-app-config.yaml` supplies the existing homepage, language, quickstart and Intelligent Assistant customizations. Both deployment methods set `SEGMENT_TEST_MODE=true`.
 
 ### Dynamic Plugins
 
@@ -304,25 +307,75 @@ Optional component plugins are stored in separate files and conditionally append
 
 | File | Component | Description |
 |------|-----------|-------------|
-| `config/nfs-dynamic-plugins.yaml` | `nfs` | NFS-compatible GHCR plugins (global header, quickstart, homepage, theme, etc.) |
+| `config/nfs-dynamic-plugins.yaml` | `nfs` | Catalog references for the existing NFS extras; home and theme use built-in defaults |
 | `config/lightspeed-dynamic-plugins.yaml` | `lightspeed` | Intelligent Assistant frontend + backend |
 | `config/scorecard-dynamic-plugins.yaml` | `scorecard` | Scorecard health/compliance KPIs |
 | `config/orchestrator-dynamic-plugins.yaml` | `orchestrator` | Serverless workflow orchestrator |
 | `config/rbac-dynamic-plugins.yaml` | `rbac` | RBAC permission framework |
+
+Plugin overrides use only `ref://<image-name>` and `enabled: true/false`. Package
+URLs, versions, digests and any required `!plugin-path` come from catalog defaults.
+Existing disabled integrations (Quay, Jira Scorecard and Orchestrator Loki) remain disabled.
+
+#### Supplying a catalog
+
+Set `CATALOG_INDEX_IMAGE` in `.env` or as a make variable to the full image reference
+of your RHDH 2.1-compatible catalog. It must contain `dynamic-plugins.default.yaml`
+with definitions for every requested plugin. The same image is passed to Helm and
+the Operator's `install-dynamic-plugins` container.
+
+The primary RHDH 2.1 index does **not** define every optional package used here:
+NFS extras include Tekton, ACR, Nexus and the TechDocs search module; Lightspeed
+also enables MCP Actions and MCP extras; Lighthouse needs its frontend/backend
+definitions. Supply a catalog with those definitions to deploy those components.
+Additional Extensions UI catalogs alone do not supply installable defaults.
+
+Before changing cluster resources, deployment downloads the selected catalog and
+checks all requested references, including explicitly disabled overrides. Missing
+definitions are reported by name. The scripts do not generate supplemental defaults
+or fall back to hardcoded plugin URLs.
+
+You can validate a supplied defaults file locally:
+
+```bash
+bash scripts/check-plugin-refs.sh /path/to/dynamic-plugins.default.yaml \
+  config/dynamic-plugins.yaml resources/keycloak/dynamic-plugins.yaml \
+  config/nfs-dynamic-plugins.yaml
+```
 
 ### Helm Values
 
 Customize deployment in `helm/value_file.yaml`:
 
 ```yaml
-upstream:
-  backstage:
-    # extraAppConfig is built dynamically by helm/deploy.sh based on enabled components
-    extraEnvVarsSecrets:
-      - rhdh-secrets
+# RHDH 2.1 uses top-level chart values.
+extraEnvFrom:
+  - secretRef:
+      name: rhdh-secrets
+auth:
+  backend:
+    existingSecretRef:
+      name: rhdh-secrets
+      key: BACKEND_SECRET
 ```
 
-The `extraAppConfig` array is dynamically constructed — it always includes `app-config-rhdh`, and adds `app-config-nfs` when NFS is enabled.
+The `extraAppConfig` array always includes `app-config-rhdh`, adding NFS and
+Orchestrator fragments according to the component flags.
+
+### Operator CR
+
+The Operator path renders `operator/backstage.yaml` using **`rhdh.redhat.com/v1alpha5`**
+and requires that API to be served by the installed operator. Replica counts,
+service-account token mounting and image overrides use `spec.deployment.patch`.
+Image overrides target both `backstage-backend` and `install-dynamic-plugins`.
+The Orchestrator flavour provides SonataFlow dependencies and NetworkPolicies;
+the Intelligent Assistant flavour supplies LCS when a provider is configured.
+
+To inspect a CR without accessing a cluster:
+
+```bash
+RHDH_BASE_URL=https://rhdh.example.test bash operator/render-cr.sh rhdh 2.1
+```
 
 ## Authentication
 
@@ -379,13 +432,29 @@ oc get secret keycloak-credentials -n rhdh-keycloak \
 
 ### NFS (New Frontend System)
 
-Enable with `WITH=nfs`. Replaces the traditional Scalprum-based frontend with the Backstage New Frontend System. Adds NFS-compatible plugins from GHCR (`rhdh-plugin-export-overlays`) including global header, quickstart, homepage, theme, adoption insights, extensions, bulk import, TechDocs, Kubernetes, Tekton, Topology, ACR, Nexus, and more.
+RHDH 2.1 uses the New Frontend System by default. `WITH=nfs` retains the existing
+extra plugin set and homepage customization through catalog references. The app's
+built-in home plugin and theme replace their former explicit dynamic packages.
 
 ### Lightspeed (Intelligent Assistant)
 
 Enable with `WITH=lightspeed`. Deploys the Intelligent Assistant frontend and backend plugins. If LLM provider credentials are configured in `.env` (e.g., `ENABLE_OPENAI=true` and `OPENAI_API_KEY=<your-api-key>`), a Lightspeed Core Service (LCS) sidecar is automatically deployed alongside RHDH to proxy LLM requests. Without credentials, the UI loads but shows "Could not load models".
 
 Supported providers: OpenAI, vLLM, Ollama, Vertex AI. See `.env.example` for all configuration options.
+
+The existing `ENABLE_*` flags select `inference.providers` in a unified LCS stack
+derived from the upstream 2.1 configuration. OpenAI keeps the existing four-model
+allow-list. Credentials stay in `lightspeed-secret`; the non-secret stack lives in
+`lightspeed-stack`. Both Helm and Operator mount these resources, without patching
+Helm-managed ConfigMaps or scaling the deployment down after installation.
+Set `LIGHTSPEED_STACK_FILE` to use your own unified stack file unchanged.
+
+### Migration validation
+
+Run the cluster-free regression checks with `bash tests/migration.sh`. Set
+`RHDH_TEST_CHART` to a downloaded 2.1 chart archive to also render Helm variants
+with and without LCS and Orchestrator. Cluster commands are stubbed during these
+checks; `operator/render-cr.sh` renders the actual Operator configuration directly.
 
 ### Scorecard
 
@@ -407,7 +476,7 @@ rhdh-test-instance/
 │   ├── app-config-rhdh.yaml                # Base RHDH configuration (auth, catalog, CORS)
 │   ├── nfs-app-config.yaml                 # NFS app.extensions, branding, globalHeader config
 │   ├── dynamic-plugins.yaml                # Base dynamic plugins (plugins: [])
-│   ├── nfs-dynamic-plugins.yaml            # NFS-compatible GHCR plugins
+│   ├── nfs-dynamic-plugins.yaml            # NFS plugin catalog references
 │   ├── lightspeed-dynamic-plugins.yaml     # Lightspeed/Intelligent Assistant plugins
 │   ├── scorecard-dynamic-plugins.yaml      # Scorecard plugins
 │   ├── orchestrator-dynamic-plugins.yaml   # Orchestrator plugins
@@ -420,7 +489,8 @@ rhdh-test-instance/
 ├── operator/
 │   ├── install-operator.sh                 # One-time operator installation (runs in container)
 │   ├── deploy.sh                           # Operator instance deployment
-│   └── subscription.yaml                   # Backstage CR template
+│   ├── backstage.yaml                      # v1alpha5 Backstage CR template
+│   └── render-cr.sh                        # Cluster-free CR rendering
 ├── resources/
 │   ├── catalog-entities/                   # Catalog entity ConfigMaps (applied unconditionally)
 │   │   ├── components.yaml                 # Demo components (Lighthouse, Keycloak, etc.)
@@ -432,14 +502,14 @@ rhdh-test-instance/
 │   ├── lighthouse/                         # Lighthouse plugin resources and config
 │   ├── lightspeed/                         # Lightspeed Core Service templates
 │   │   ├── lightspeed-secret.yaml          # LCS credentials Secret template
-│   │   ├── lightspeed-stack.yaml           # LCS main configuration ConfigMap
-│   │   ├── lightspeed-config.yaml          # Llama Stack / LLM provider ConfigMap
-│   │   └── lightspeed-rhdh-profile.yaml    # RHDH customization profile
+│   │   └── providers.yaml                  # Unified LCS provider definitions
 │   └── rhdh-script-examples/              # Demo workloads for Topology/Kubernetes views
 ├── scripts/
 │   ├── config-plugins.sh                   # Plugin orchestration and _append_plugin_dynamic_config helper
 │   ├── setup-resources.sh                  # Shared cluster resource provisioning/teardown
-│   ├── setup-lightspeed.sh                 # Lightspeed Core Service setup and sidecar patching
+│   ├── setup-lightspeed.sh                 # LCS stack and credential setup
+│   ├── deployment-common.sh                # 2.1 version, image and catalog helpers
+│   ├── check-plugin-refs.sh                # Validate references against supplied defaults
 │   └── plugins/
 │       ├── config-keycloak-plugin.sh       # Keycloak deploy, realm/client/user setup
 │       └── config-lighthouse-plugin.sh     # Lighthouse deploy and URL injection

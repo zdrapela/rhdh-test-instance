@@ -149,8 +149,16 @@ apply_rhdh_configmaps() {
   echo ""
   echo "Applying RHDH ConfigMaps..."
 
+  # Keep conditional catalog locations aligned with the ConfigMaps being mounted.
+  local app_config
+  app_config=$(WITH_ORCHESTRATOR="${WITH_ORCHESTRATOR:-0}" PLUGINS="${PLUGINS:-}" \
+    yq '.catalog.locations |= map(select(
+      (.target != "./catalog-entities/operators.yaml" or strenv(WITH_ORCHESTRATOR) == "1") and
+      ((.target != "./catalog-entities/components.yaml" and .target != "./catalog-entities/resources.yaml") or
+        (strenv(PLUGINS) | contains("lighthouse")))
+    ))' "${ROOT_DIR}/config/app-config-rhdh.yaml")
   oc create configmap app-config-rhdh \
-    --from-file="${ROOT_DIR}/config/app-config-rhdh.yaml" \
+    --from-file=app-config-rhdh.yaml=<(printf '%s\n' "$app_config") \
     --namespace="${NAMESPACE}" \
     --dry-run=client -o yaml | oc apply -f - --namespace="${NAMESPACE}"
 
@@ -300,7 +308,7 @@ teardown_resources() {
   oc delete secret rhdh-secrets --namespace="${NAMESPACE}" 2>/dev/null || true
 
   echo "Removing RHDH ConfigMaps..."
-  oc delete configmap app-config-rhdh app-config-nfs app-config-orchestrator dynamic-plugins \
+  oc delete configmap app-config-rhdh app-config-nfs app-config-orchestrator dynamic-plugins lightspeed-stack \
     --namespace="${NAMESPACE}" 2>/dev/null || true
 
   echo "Removing catalog entity ConfigMaps..."
@@ -311,6 +319,10 @@ teardown_resources() {
   echo "Removing RBAC policy ConfigMap..."
   oc delete -f "${ROOT_DIR}/config/rbac-policies.yaml" \
     --namespace="${NAMESPACE}" 2>/dev/null || true
+
+  oc delete secret lightspeed-secret --namespace="${NAMESPACE}" --ignore-not-found
+  oc delete networkpolicy rhdh-lighthouse-egress rhdh-llm-egress \
+    --namespace="${NAMESPACE}" --ignore-not-found
 
 
   echo "Removing Kubernetes plugin RBAC..."
@@ -346,6 +358,9 @@ setup_resources() {
   apply_image_stream_imports
   apply_demo_resources
   apply_kubernetes_rbac
+  if [[ "${PLUGINS:-}" == *"lighthouse"* ]]; then
+    oc apply -f "${ROOT_DIR}/resources/lighthouse/network-policy.yaml" --namespace="${NAMESPACE}"
+  fi
 
   echo ""
   echo "=============================================="

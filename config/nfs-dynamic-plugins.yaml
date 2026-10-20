@@ -1,138 +1,66 @@
-# Disable catalog-index packages via {{inherit}} (merge with included defaults;
-# stale tags/digests create Duplicate OCI plugin errors on install).
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-homepage:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-homepage-backend:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-global-header:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-quickstart:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-adoption-insights:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-adoption-insights-backend:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-analytics-module-adoption-insights:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-app-defaults:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-app-auth:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-app-integrations:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/backstage-plugin-techdocs:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/backstage-plugin-techdocs-backend:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/backstage-plugin-techdocs-module-addons-contrib:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/backstage-plugin-kubernetes:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/backstage-plugin-kubernetes-backend:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/backstage-community-plugin-topology:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-bulk-import:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-bulk-import-backend:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-extensions:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-extensions-backend:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-catalog-backend-module-extensions:{{inherit}}
-  disabled: true
-
-# Core NFS plugins (Backstage 1.54.x / RHDH 2.1)
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-defaults:bs_1.54.9__1.11.0
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-auth:bs_1.54.9__1.2.0
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-app-integrations:bs_1.54.9__1.1.1
-  disabled: false
-
-# Global Header
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-global-header:bs_1.54.9__3.1.0
-  disabled: false
-
-# Theme
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-theme:bs_1.54.9__1.4.0
-  disabled: false
-
-# Quickstart
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-quickstart:bs_1.54.9__2.2.0
-  disabled: false
-
-# Homepage
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-home:bs_1.54.9__0.9.9
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-homepage:bs_1.54.9__3.0.0
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-homepage-backend:bs_1.54.9__0.6.0
-  disabled: false
-
-# Adoption Insights + Analytics
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-adoption-insights:bs_1.54.9__1.0.4
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-adoption-insights-backend:bs_1.54.9__1.0.4
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-analytics-module-adoption-insights:bs_1.54.9__1.0.4
-  disabled: false
-
-# Extensions (disable bundled OFS, enable GHCR NFS overlays)
-- package: ./dynamic-plugins/dist/red-hat-developer-hub-backstage-plugin-extensions
-  disabled: true
-- package: ./dynamic-plugins/dist/red-hat-developer-hub-backstage-plugin-extensions-backend-dynamic
-  disabled: true
-- package: ./dynamic-plugins/dist/red-hat-developer-hub-backstage-plugin-catalog-backend-module-extensions-dynamic
-  disabled: true
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-extensions:bs_1.54.9__1.0.1
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-extensions-backend:bs_1.54.9__1.0.1
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-catalog-backend-module-extensions:bs_1.54.9__1.0.1
-  disabled: false
-
-# Bulk Import
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-bulk-import:bs_1.54.9__9.1.1
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-bulk-import-backend:bs_1.54.9__9.1.1
-  disabled: false
-
-# TechDocs
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-techdocs:bs_1.54.9__1.18.0
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-techdocs-backend:bs_1.54.9__2.2.4
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-search-backend-module-techdocs:bs_1.54.9__0.4.17
-  disabled: false
-
-# Kubernetes (disable catalog index, enable GHCR)
-- package: ./dynamic-plugins/dist/backstage-plugin-kubernetes
-  disabled: true
-- package: ./dynamic-plugins/dist/backstage-plugin-kubernetes-backend-dynamic
-  disabled: true
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-kubernetes:bs_1.54.9__0.12.22
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-kubernetes-backend:bs_1.54.9__0.21.10
-  disabled: false
-
-# Tekton
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-tekton:bs_1.54.9__4.0.5
-  disabled: false
-
-# Topology
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-topology:bs_1.54.9__3.0.1
-  disabled: false
-
-# ACR (Azure Container Registry)
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-acr:bs_1.54.9__1.28.1
-  disabled: false
-
-# Quay
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-quay-backend:bs_1.54.9__1.18.1
-  disabled: true # requires quay configuration in app-config
-
-# Nexus Repository Manager
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-nexus-repository-manager:bs_1.54.9__1.27.4
-  disabled: false
+# RHDH 2.1 already bundles plugin-home and the RHDH theme in the app.
+# All other packages resolve through the supplied catalog's defaults.
+- package: ref://red-hat-developer-hub-backstage-plugin-app-defaults
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-app-auth
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-app-integrations
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-global-header
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-quickstart
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-homepage
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-homepage-backend
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-adoption-insights
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-adoption-insights-backend
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-analytics-module-adoption-insights
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-extensions
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-extensions-backend
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-catalog-backend-module-extensions
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-bulk-import
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-bulk-import-backend
+  enabled: true
+- package: ref://backstage-plugin-techdocs
+  enabled: true
+- package: ref://backstage-plugin-techdocs-backend
+  enabled: true
+- package: ref://backstage-plugin-techdocs-module-addons-contrib
+  enabled: false
+- package: ref://backstage-plugin-search-backend-module-techdocs
+  enabled: true
+- package: ref://backstage-plugin-kubernetes
+  enabled: true
+- package: ref://backstage-plugin-kubernetes-backend
+  enabled: true
+  pluginConfig:
+    kubernetes:
+      serviceLocatorMethod:
+        type: multiTenant
+      clusterLocatorMethods:
+        - type: config
+          clusters:
+            - url: https://kubernetes.default.svc
+              name: local-cluster
+              authProvider: serviceAccount
+              skipTLSVerify: true
+              skipMetricsLookup: true
+- package: ref://backstage-community-plugin-tekton
+  enabled: true
+- package: ref://backstage-community-plugin-topology
+  enabled: true
+- package: ref://backstage-community-plugin-acr
+  enabled: true
+- package: ref://backstage-community-plugin-quay-backend
+  enabled: false # requires quay configuration in app-config
+- package: ref://backstage-community-plugin-nexus-repository-manager
+  enabled: true

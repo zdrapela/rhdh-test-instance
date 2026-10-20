@@ -1,15 +1,8 @@
-# Disable catalog-index IA packages (must use {{inherit}} so the key merges
-# with the included default instead of adding a second quay.io entry).
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-intelligent-assistant:{{inherit}}
-  disabled: true
-- package: oci://quay.io/rhdh/red-hat-developer-hub-backstage-plugin-intelligent-assistant-backend:{{inherit}}
-  disabled: true
-
-# NFS-compatible Intelligent Assistant (RHDH 2.1 / Backstage 1.54.x)
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-intelligent-assistant:bs_1.54.9__5.3.6
-  disabled: false
-- package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/red-hat-developer-hub-backstage-plugin-intelligent-assistant-backend:bs_1.54.9__5.3.6
-  disabled: false
+# Intelligent Assistant, using catalog defaults with the existing MCP settings.
+- package: ref://red-hat-developer-hub-backstage-plugin-intelligent-assistant
+  enabled: true
+- package: ref://red-hat-developer-hub-backstage-plugin-intelligent-assistant-backend
+  enabled: true
   pluginConfig:
     intelligent-assistant:
       mcpServers:

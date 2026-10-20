@@ -4,8 +4,6 @@ set -e
 # Default values
 namespace="rhdh"
 installation_method=""
-CV=""
-github=0 # by default don't use the Github repo unless the chart doesn't exist in the OCI registry
 WITH_ORCHESTRATOR=0
 WITH_NFS=0
 WITH_LIGHTSPEED=0
@@ -26,12 +24,12 @@ if [[ $# -lt 2 ]]; then
     echo "  --without <components>   Comma-separated list of components to exclude (use with --with all)"
     echo "  --plugins <list>         Infrastructure plugins (default: keycloak is always included)"
     echo "Examples:"
-    echo "  $0 helm next"
-    echo "  $0 helm next --with nfs,lightspeed"
-    echo "  $0 helm next --with all"
-    echo "  $0 helm next --with all --without orchestrator,lightspeed"
-    echo "  $0 helm next --namespace my-test --with nfs,scorecard"
-    echo "  $0 operator 1.9 --with orchestrator"
+    echo "  $0 helm 2.1"
+    echo "  $0 helm 2.1 --with nfs,lightspeed"
+    echo "  $0 helm 2.1 --with all"
+    echo "  $0 helm 2.1 --with all --without orchestrator,lightspeed"
+    echo "  $0 helm 2.1 --namespace my-test --with nfs,scorecard"
+    echo "  $0 operator 2.1 --with orchestrator"
     exit 1
 fi
 
@@ -127,7 +125,18 @@ if [[ "$installation_method" != "helm" && "$installation_method" != "operator" ]
 fi
 
 [[ "${OPENSHIFT_CI}" != "true" ]] && source .env
-# source utils/utils.sh
+source scripts/deployment-common.sh
+validate_rhdh_version "$version"
+resolve_catalog_image
+prepare_deploy_workdir
+
+# Resolve every requested ref before creating or changing any cluster resources.
+for tool in jq yq skopeo; do
+    command -v "$tool" >/dev/null || { echo "Error: Required tool '$tool' is not installed." >&2; exit 1; }
+done
+fetch_catalog_defaults "${DEPLOY_WORKDIR}/dynamic-plugins.default.yaml"
+mapfile -t PLUGIN_CONFIG_FILES < <(plugin_config_files)
+bash scripts/check-plugin-refs.sh "${DEPLOY_WORKDIR}/dynamic-plugins.default.yaml" "${PLUGIN_CONFIG_FILES[@]}"
 
 # Create or switch to the specified namespace
 oc new-project "$namespace" || oc project "$namespace"
@@ -155,8 +164,6 @@ echo "RHDH URL: ${RHDH_BASE_URL}"
 export NAMESPACE="$namespace"
 source scripts/setup-resources.sh
 setup_resources
-
-export IS_AUTH_ENABLED="${IS_AUTH_ENABLED:-false}"
 
 # ── Shared Keycloak (always) ──────────────────────────────────────────────────
 # Keycloak OIDC is core auth, not an optional plugin. Call its setup functions
@@ -190,7 +197,7 @@ if [[ "${WITH_LIGHTSPEED}" == "1" ]]; then
     _append_plugin_dynamic_config "${PWD}/config/lightspeed-dynamic-plugins.yaml" "Lightspeed"
     _append_plugin_dynamic_config "${PWD}/config/mcp-dynamic-plugins.yaml" "MCP"
     source scripts/setup-lightspeed.sh
-    setup_lightspeed_secret
+    setup_lightspeed
 fi
 
 if [[ "${WITH_SCORECARD}" == "1" ]]; then
@@ -214,7 +221,12 @@ else
 fi
 
 # Wait for the deployment to be ready
-oc rollout status deployment -l 'app.kubernetes.io/instance in (redhat-developer-hub,developer-hub)' -n "$namespace" --timeout=500s || { echo "Error: Timed out waiting for deployment to be ready."; exit 1; }
+if [[ "$installation_method" == "helm" ]]; then
+    deployment_name=redhat-developer-hub
+else
+    deployment_name=backstage-developer-hub
+fi
+oc rollout status "deployment/${deployment_name}" -n "$namespace" --timeout=500s
 
 echo "
 RHDH_BASE_URL : 

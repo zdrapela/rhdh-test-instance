@@ -17,13 +17,13 @@ Users deploy test instances by commenting on PRs:
 ```
 
 - `install-type`: `helm` or `operator`
-- `version`: `2.1`, `2.1-128-CI`, `1.11`, `next`
+- `version`: `2.1`, a 2.1 patch release, or `2.1-128-CI`
 - `duration`: optional cleanup timer (e.g., `4h`, `2.5h`; default `3h`)
 
 Examples:
 ```
 /test deploy helm 2.1 4h
-/test deploy helm next 4h
+/test deploy helm 2.1-128-CI 4h
 /test deploy operator 2.1 2.5h
 ```
 
@@ -55,7 +55,7 @@ make deploy-helm WITH=all WITHOUT=orchestrator,lightspeed
 
 # Helm with specific version + namespace + components
 make deploy-helm VERSION=2.1 NAMESPACE=team-a WITH=nfs,lightspeed,scorecard,rbac
-make deploy-helm VERSION=next WITH=all WITHOUT=orchestrator
+make deploy-helm VERSION=2.1 WITH=all WITHOUT=orchestrator
 
 # Helm with PR image
 make deploy-helm RHDH_IMAGE=quay.io/rhdh-community/rhdh:pr-1234 WITH=nfs
@@ -96,13 +96,14 @@ make url       # Print the RHDH portal URL
 | Variable | Default | Description |
 |---|---|---|
 | `NAMESPACE` | `rhdh` | OpenShift namespace for RHDH |
-| `VERSION` | `next` | RHDH version (supports `2.1`, `2.1-128-CI`, `1.11`, `next`) |
+| `VERSION` | `2.1` | RHDH 2.1 release line, patch release, or CI chart build |
 | `WITH` | (empty) | Comma-separated optional components: `nfs`, `lightspeed`, `scorecard`, `orchestrator`, `rbac`, or `all` |
 | `WITHOUT` | (empty) | Comma-separated components to exclude (use with `WITH=all` to skip specific ones) |
 | `RHDH_IMAGE` | (empty) | Override RHDH container image (e.g., `quay.io/rhdh-community/rhdh:pr-1234`) |
 | `KEYCLOAK_NS` | `rhdh-keycloak` | Namespace for shared Keycloak (all RHDH instances share one Keycloak) |
 | `PLUGINS` | (empty) | Infrastructure plugins to deploy/teardown (keycloak is always auto-included) |
-| `CATALOG_INDEX_TAG` | auto-detected | Plugin catalog index tag |
+| `CATALOG_INDEX_TAG` | `2.1` | Primary plugin catalog index tag |
+| `CATALOG_INDEX_IMAGE` | `quay.io/rhdh/plugin-catalog-index:2.1` | Full supplied catalog image; overrides `CATALOG_INDEX_TAG` |
 
 ## Architecture
 
@@ -110,6 +111,7 @@ make url       # Print the RHDH portal URL
 deploy.sh (entry point)
 ├── Parses args: method (helm/operator), version, namespace, --with <components>, --without <components>
 ├── Sources .env (local; required) or uses CI-injected Vault secrets (OPENSHIFT_CI=true)
+├── Validates requested ref:// plugins against the supplied catalog before cluster changes
 ├── Deploys shared Keycloak via scripts/plugins/config-keycloak-plugin.sh (into KEYCLOAK_NS)
 │   └── Auto-fixes KC_HOSTNAME if cluster has changed (pool rotation)
 ├── Creates namespace and app-config ConfigMap from config/
@@ -130,11 +132,11 @@ deploy.sh (entry point)
 
 - **config/** — RHDH application config and dynamic plugin definitions. Base configs (`app-config-rhdh.yaml`, `dynamic-plugins.yaml`) are always applied. Component-specific configs (`nfs-*`, `lightspeed-*`, `scorecard-*`, `rbac-*`) are conditionally appended based on `WITH=` flags.
 - **helm/** — Helm-specific deployment: `deploy.sh` resolves chart versions from Quay, `value_file.yaml` provides Helm overrides. `extraAppConfig` is dynamically built based on enabled components.
-- **operator/** — Operator-based deployment: `install-operator.sh` installs the RHDH operator CRD, `deploy.sh` applies the Backstage CR from `subscription.yaml`.
+- **operator/** — `install-operator.sh` installs the RHDH operator; `render-cr.sh` renders `backstage.yaml` with the current `rhdh.redhat.com/v1alpha5` API, and `deploy.sh` applies it with strict validation. Image and replica overrides use `spec.deployment.patch`.
 - **resources/keycloak/** — Keycloak plugin resources: Helm values, OIDC client template, users/groups JSON, dynamic-plugins overlay.
-- **resources/lightspeed/** — Lightspeed Core Service (LCS) Kubernetes resource templates: Secret, ConfigMaps for Llama Stack config, LCS stack config, and RHDH profile.
+- **resources/lightspeed/** — LCS Secret and unified provider definitions. Stack defaults come from the upstream 2.1 chart or a supplied `LIGHTSPEED_STACK_FILE`.
 - **scripts/plugins/config-keycloak-plugin.sh** — Shared Keycloak deployment: Helm install into `KEYCLOAK_NS`, realm/user/group creation, per-instance OIDC client registration. Auto-detects and fixes stale `KC_HOSTNAME` on cluster rotation.
-- **scripts/setup-lightspeed.sh** — Lightspeed Core Service setup: checks for LLM provider credentials, creates LCS Kubernetes resources, patches RHDH deployment with LCS sidecar container.
+- **scripts/setup-lightspeed.sh** — Creates the LCS stack ConfigMap and credentials Secret consumed by the Helm chart or Operator flavour, selecting providers through the existing `ENABLE_*` flags.
 - **scripts/config-plugins.sh** — Plugin orchestration: sources all plugin scripts, provides `_append_plugin_dynamic_config` helper for appending plugin YAML to the cluster ConfigMap.
 
 ### Deployment flow
@@ -145,7 +147,7 @@ deploy.sh (entry point)
 4. `config/app-config-rhdh.yaml` configures RHDH with OIDC auth pointing to the shared Keycloak and catalog entity locations from GitHub.
 5. For Helm: the RHDH chart is installed with dynamic plugins config. For Operator: a Backstage CR is applied referencing the ConfigMaps.
 6. Optional components are enabled via `--with <components>` (comma-separated):
-   - `nfs` — NFS GHCR plugins merged from `config/nfs-dynamic-plugins.yaml` (global header, homepage, theme, extensions, bulk import, TechDocs, Kubernetes, Tekton, Topology, ACR, Nexus, etc.), `nfs-app-config.yaml` applied as extra ConfigMap (RHDH 2.1+ default `app` is already NFS; do not set `APP_CONFIG_app_packageName=app-next`)
+   - `nfs` — Catalog references from `config/nfs-dynamic-plugins.yaml` (global header, homepage, extensions, bulk import, TechDocs, Kubernetes, Tekton, Topology, ACR, Nexus, etc.). Home and theme are built into the 2.1 app. `nfs-app-config.yaml` preserves homepage/language/quickstart settings; NFS is already the default frontend.
    - `orchestrator` — orchestrator plugins merged from `config/orchestrator-dynamic-plugins.yaml`, serverless operators installed
    - `lightspeed` — intelligent-assistant plugins merged from `config/lightspeed-dynamic-plugins.yaml`. If LLM provider credentials exist (e.g., `ENABLE_OPENAI=true`), LCS sidecar is deployed; otherwise UI loads but shows "Could not load models"
    - `scorecard` — scorecard plugins merged from `config/scorecard-dynamic-plugins.yaml`
@@ -161,8 +163,21 @@ deploy.sh (entry point)
 
 ## Required CLI Tools
 
-`oc`, `helm`, `jq`, `curl`, `podman` (or `docker` for container-based operator install)
+`oc`, `helm`, `jq`, `curl`, Mike Farah's `yq` v4, `skopeo`, Python 3, Bash 4.3+, and `podman` (or `docker` for container-based operator install)
 
 ## Version Resolution
 
-Helm deploy resolves semantic versions (e.g., `1.11`) to the latest patch by querying the Quay.io API for available chart tags. CI versions like `1.9-190-CI` and `next` are passed through directly.
+Helm resolves `2.1` to the latest available tag on that release line via Quay. Specific 2.1 patch/CI tags are passed through. Other release lines and `next` are rejected. Operator installation selects the `release-2.1` branch and IIB release line.
+
+## Plugin Configuration Migration Rules
+
+- Preserve existing configuration and enabled/disabled integrations when migrating.
+- Use only built-in defaults or `ref://` entries, with `enabled: true/false`. Do not hardcode plugin artifact URLs, versions, digests, or plugin paths.
+- Missing references require a supplied catalog containing installable defaults; do not generate supplemental defaults or silently drop plugins. The primary 2.1 index lacks some NFS extras, MCP and Lighthouse packages. Additional UI-only catalogs do not resolve `ref://` entries.
+- Use the current Backstage CR API (`v1alpha5`), not an older served version.
+- Both deployment methods must set `SEGMENT_TEST_MODE=true`.
+- Keep Keycloak infrastructure unchanged during this migration.
+
+## Validation
+
+Run `bash tests/migration.sh` for cluster-free migration regression checks. Set `RHDH_TEST_CHART` to a local 2.1 chart archive to also render Helm variants. `bash operator/render-cr.sh <namespace> 2.1` renders the Operator CR without cluster access (`RHDH_BASE_URL` is required).
