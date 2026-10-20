@@ -121,7 +121,7 @@ For local development and testing environments, you can deploy RHDH directly to 
    ```bash
    cp .env.example .env
     # Edit .env to add Lightspeed API keys or other credentials
-    # Set CATALOG_INDEX_IMAGE to your supplied catalog for optional packages
+    # Leave CATALOG_INDEX_IMAGE empty to use the bundled catalog
    ```
 
 3. **Deploy RHDH:**
@@ -228,14 +228,28 @@ All make commands accept these variables:
 | `PLUGINS`           | _(empty)_                                     | Infrastructure plugins to deploy/teardown (e.g. `keycloak,lighthouse`)        |
 | `KEYCLOAK_NS`       | `rhdh-keycloak`                               | Namespace for shared Keycloak (all RHDH instances share one Keycloak)         |
 | `RHDH_IMAGE`        | _(empty)_                                     | Override RHDH container image (e.g., `quay.io/rhdh-community/rhdh:pr-1234`)  |
-| `CATALOG_INDEX_TAG` | `2.1`                                         | Tag for the primary RHDH catalog when no full image is supplied              |
-| `CATALOG_INDEX_IMAGE` | `quay.io/rhdh/plugin-catalog-index:2.1`       | Full supplied catalog image; takes precedence over `CATALOG_INDEX_TAG`       |
+| `CATALOG_INDEX_TAG` | (empty)                                       | Optional catalog tag override when no full image is supplied                |
+| `CATALOG_INDEX_IMAGE` | (bundled with chart/Operator)                | Optional full catalog image; takes precedence over `CATALOG_INDEX_TAG`      |
+| `OPERATOR_IIB_IMAGE` | (published 2.1 IIB for the cluster)           | Optional immutable IIB reference for a reproducible Operator installation |
+| `OPERATOR_EXPECTED_IMAGE` | (empty)                                 | Verify the installed Operator manager image against this RC reference |
+| `OPERATOR_EXPECTED_RHDH_IMAGE` | (empty)                            | Verify the Operator's bundled application image |
+| `OPERATOR_EXPECTED_CATALOG_IMAGE` | (empty)                         | Verify the Operator's bundled plugin catalog image |
 | `USE_CONTAINER`     | `false`                                       | Set to `true` to run commands inside the e2e-runner container                 |
 | `RUNNER_IMAGE`      | `quay.io/rhdh-community/rhdh-e2e-runner:main` | Container image for `install-operator`                                       |
 
 > **Note:** `install-operator` requires you to be logged into the cluster via `oc login` on your host.
-> It automatically passes the session token to the e2e-runner container (needs Linux tools like `umoci`, `opm`, `skopeo`).
+> Installation uses `oc`, `jq`, `yq`, and `skopeo`, either on the host or in the e2e-runner container.
 > The operator is installed once per cluster. After that, `deploy-operator` runs locally like `deploy-helm`.
+
+The installer creates a CatalogSource and Subscription from the published RHDH
+2.1 IIB for the cluster's OpenShift version and architecture. It resolves the IIB
+tag to a digest and prints the immutable reference. Set `OPERATOR_IIB_IMAGE` to
+that reference to reproduce the installation. Bundles and catalogs are never rebuilt.
+An existing installation is verified and reused; an explicitly requested IIB must
+match its CatalogSource. Set `OPERATOR_EXPECTED_IMAGE`, `OPERATOR_EXPECTED_RHDH_IMAGE`,
+and `OPERATOR_EXPECTED_CATALOG_IMAGE` to verify a specific RC's manager, bundled
+application, and catalog images before deployment. Missing or mismatched published
+artifacts are installation errors, rather than reasons to rewrite bundles.
 
 ### Direct Script Usage
 
@@ -313,24 +327,38 @@ Optional component plugins are stored in separate files and conditionally append
 | `config/orchestrator-dynamic-plugins.yaml` | `orchestrator` | Serverless workflow orchestrator |
 | `config/rbac-dynamic-plugins.yaml` | `rbac` | RBAC permission framework |
 
-Plugin overrides use only `ref://<image-name>` and `enabled: true/false`. Package
+Plugin overrides use `ref://<image-name>` and `enabled: true/false`. Package
 URLs, versions, digests and any required `!plugin-path` come from catalog defaults.
-Existing disabled integrations (Quay, Jira Scorecard and Orchestrator Loki) remain disabled.
+Existing disabled integrations (Jira Scorecard and Orchestrator Loki) remain disabled.
+
+The catalog bundled with Helm `2.1-119-CI` references Scorecard images with empty
+discovery annotations ([RHDHBUGS-3834](https://redhat.atlassian.net/browse/RHDHBUGS-3834)).
+For this chart, omit `scorecard` from `WITH` (or use `WITHOUT=scorecard` with `WITH=all`).
+The scripts do not patch plugin metadata or catalog defaults to bypass this defect.
+Newer catalogs and the pinned Operator RC have valid Scorecard metadata; validate
+them independently rather than assuming the defect affects every 2.1 build.
+Helm `2.1-119-CI` also bundles Homepage 1.x, which extends `page:home`;
+deployment adapts the NFS homepage configuration for that chart. The newer
+Operator's Homepage 3.x uses the original `page:homepage` configuration.
 
 #### Supplying a catalog
 
-Set `CATALOG_INDEX_IMAGE` in `.env` or as a make variable to the full image reference
-of your RHDH 2.1-compatible catalog. It must contain `dynamic-plugins.default.yaml`
-with definitions for every requested plugin. The same image is passed to Helm and
-the Operator's `install-dynamic-plugins` container.
+By default, each deployment uses the catalog bundled with its selected Helm chart
+or installed Operator. Preflight validates that exact catalog without replacing
+the release's runtime default. Install the Operator before deploying a local
+instance; CI installs it automatically when its defaults are missing.
+
+Optionally set `CATALOG_INDEX_IMAGE` in `.env` or as a make variable to the full
+image reference of your RHDH 2.1-compatible catalog. It must contain
+`dynamic-plugins.default.yaml` with definitions for every requested plugin.
 
 The primary RHDH 2.1 index does **not** define every optional package used here:
-NFS extras include Tekton, ACR, Nexus and the TechDocs search module; Lightspeed
-also enables MCP Actions and MCP extras; Lighthouse needs its frontend/backend
+Lightspeed enables MCP Actions and MCP extras; Lighthouse needs its frontend/backend
 definitions. Supply a catalog with those definitions to deploy those components.
+NFS omits unavailable Tekton, ACR, Nexus, Quay backend and TechDocs search module refs.
 Additional Extensions UI catalogs alone do not supply installable defaults.
 
-Before changing cluster resources, deployment downloads the selected catalog and
+Before changing instance resources, deployment downloads the selected catalog and
 checks all requested references, including explicitly disabled overrides. Missing
 definitions are reported by name. The scripts do not generate supplemental defaults
 or fall back to hardcoded plugin URLs.

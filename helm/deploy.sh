@@ -15,11 +15,7 @@ resolve_catalog_image
 prepare_deploy_workdir
 
 # Validate version and determine chart version
-if [[ "$version" == "2.1" ]]; then
-    CV=$(quay_latest_tag "rhdh/chart" "$version")
-else
-    CV="$version"
-fi
+CV="${RESOLVED_HELM_CHART_VERSION:-$(resolve_helm_chart_version "$version")}"
 
 if [[ -z "${CV}" || "${CV}" == "null" ]]; then
     echo "Error: Could not resolve Helm chart version for '${version}'."
@@ -30,7 +26,7 @@ fi
 
 echo "Using Helm chart version: ${CV}"
 
-echo "Using catalog index: ${CATALOG_INDEX_IMAGE}"
+echo "Using catalog index: ${RESOLVED_CATALOG_INDEX_IMAGE:-${CATALOG_INDEX_IMAGE:-chart default}}"
 
 CHART_URL="oci://quay.io/rhdh/chart"
 helm show chart "$CHART_URL" --version "$CV" >/dev/null
@@ -105,10 +101,13 @@ HELM_ARGS=(
     -f "helm/value_file.yaml"
     -f "$DYNAMIC_PLUGINS_FILE"
     --set "openshift.clusterRouterBase=${CLUSTER_ROUTER_BASE}"
-    --set-json "catalogIndex.image=$(image_values "$CATALOG_INDEX_IMAGE")"
     --set-json "extraAppConfig=${EXTRA_APP_CONFIGS}"
     --namespace "$namespace"
 )
+
+if [[ -n "$CATALOG_INDEX_IMAGE" ]]; then
+    HELM_ARGS+=(--set-json "catalogIndex.image=$(image_values "$CATALOG_INDEX_IMAGE")")
+fi
 
 # Component refs are already in dynamicPlugins.plugins. Do not append them twice.
 if [[ "${WITH_ORCHESTRATOR}" == "1" ]]; then

@@ -1,5 +1,5 @@
 # RHDH 2.1 already bundles plugin-home and the RHDH theme in the app.
-# All other packages resolve through the supplied catalog's defaults.
+# All other packages resolve through the bundled catalog's defaults.
 - package: ref://red-hat-developer-hub-backstage-plugin-app-defaults
   enabled: true
 - package: ref://red-hat-developer-hub-backstage-plugin-app-auth
@@ -36,8 +36,6 @@
   enabled: true
 - package: ref://backstage-plugin-techdocs-module-addons-contrib
   enabled: false
-- package: ref://backstage-plugin-search-backend-module-techdocs
-  enabled: true
 - package: ref://backstage-plugin-kubernetes
   enabled: true
 - package: ref://backstage-plugin-kubernetes-backend
@@ -54,13 +52,5 @@
               authProvider: serviceAccount
               skipTLSVerify: true
               skipMetricsLookup: true
-- package: ref://backstage-community-plugin-tekton
-  enabled: true
 - package: ref://backstage-community-plugin-topology
-  enabled: true
-- package: ref://backstage-community-plugin-acr
-  enabled: true
-- package: ref://backstage-community-plugin-quay-backend
-  enabled: false # requires quay configuration in app-config
-- package: ref://backstage-community-plugin-nexus-repository-manager
   enabled: true

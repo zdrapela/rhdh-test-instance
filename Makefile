@@ -9,12 +9,20 @@ CATALOG_INDEX_IMAGE ?=
 RHDH_IMAGE ?=
 RUNNER_IMAGE ?= quay.io/rhdh-community/rhdh-e2e-runner:main
 OPERATOR_NAMESPACE ?= rhdh-operator-system
+OPERATOR_IIB_IMAGE ?=
+OPERATOR_EXPECTED_IMAGE ?=
+OPERATOR_EXPECTED_RHDH_IMAGE ?=
+OPERATOR_EXPECTED_CATALOG_IMAGE ?=
 KEYCLOAK_NS ?= rhdh-keycloak
 
 export CATALOG_INDEX_TAG
 export CATALOG_INDEX_IMAGE
 export RHDH_IMAGE
 export OPERATOR_NAMESPACE
+export OPERATOR_IIB_IMAGE
+export OPERATOR_EXPECTED_IMAGE
+export OPERATOR_EXPECTED_RHDH_IMAGE
+export OPERATOR_EXPECTED_CATALOG_IMAGE
 export KEYCLOAK_NS
 
 # Build deploy flags
@@ -138,16 +146,18 @@ run-in-runner: ## Run a command inside the e2e-runner container (requires oc log
 ifndef CMD
 	$(error CMD is required)
 endif
-	$(eval K8S_CLUSTER_URL := $(shell oc whoami --show-server))
-	$(eval K8S_CLUSTER_TOKEN := $(shell oc whoami --show-token))
+	K8S_CLUSTER_URL="$$(oc whoami --show-server)" K8S_CLUSTER_TOKEN="$$(oc whoami --show-token)" \
 	podman run --rm \
 		-v $(CURDIR):/workspace:z \
 		-w /workspace \
-		-e KUBECONFIG=/tmp/.kube/config \
+		--tmpfs /run/rhdh:rw,mode=0700 \
+		-e KUBECONFIG=/run/rhdh/kubeconfig -e TMPDIR=/run/rhdh \
+		-e K8S_CLUSTER_URL -e K8S_CLUSTER_TOKEN \
 		-e CATALOG_INDEX_IMAGE -e CATALOG_INDEX_TAG -e RHDH_IMAGE \
-		-e OPERATOR_NAMESPACE -e KEYCLOAK_NS \
+		-e OPERATOR_NAMESPACE -e OPERATOR_IIB_IMAGE -e KEYCLOAK_NS \
+		-e OPERATOR_EXPECTED_IMAGE -e OPERATOR_EXPECTED_RHDH_IMAGE -e OPERATOR_EXPECTED_CATALOG_IMAGE \
 		$(RUNNER_IMAGE) \
-		bash -c 'mkdir -p /tmp/.kube && oc login --token=$(K8S_CLUSTER_TOKEN) --server=$(K8S_CLUSTER_URL) --insecure-skip-tls-verify=true && source .env && $(CMD)'
+		bash -c 'oc login --token="$$K8S_CLUSTER_TOKEN" --server="$$K8S_CLUSTER_URL" --insecure-skip-tls-verify=true >/dev/null && source .env && $(CMD)'
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 

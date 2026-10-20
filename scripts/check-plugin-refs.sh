@@ -26,10 +26,10 @@ jq -n --slurpfile defaults "${DEPLOY_WORKDIR}/defaults.json" \
     ($defaults[0].plugins | map(select(.package | startswith("oci://")) | .package | image_name)) as $available |
     ($configs | map(entries) | add) as $plugins |
     [$plugins[] | select(.package | startswith("ref://") | not) | .package] as $direct |
-    [$plugins | group_by(.package)[] | select(length > 1) | .[0].package] as $duplicates |
+    [$plugins | group_by(.package | image_name)[] | select(length > 1) | .[0].package] as $duplicates |
     [$available | group_by(.)[] | select(length > 1) | .[0] |
-        select(. as $name | $plugins | any(.package == ("ref://" + $name)))] as $ambiguous |
-    [$plugins[].package | ltrimstr("ref://") | select(. as $name | $available | index($name) | not)] as $missing |
+        select(. as $name | $plugins | any((.package | image_name) == $name))] as $ambiguous |
+    [$plugins[].package | image_name | select(. as $name | $available | index($name) | not)] as $missing |
     if ($direct | length) > 0 then
         error("Plugin configuration must use ref://: " + ($direct | join(", ")))
     elif ($duplicates | length) > 0 then

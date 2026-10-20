@@ -127,10 +127,20 @@ fi
 [[ "${OPENSHIFT_CI}" != "true" ]] && source .env
 source scripts/deployment-common.sh
 validate_rhdh_version "$version"
-resolve_catalog_image
+if [[ "$installation_method" == "operator" ]]; then
+    # CI bootstraps the shared Operator before instance preflight can read its
+    # bundled defaults. Local deployments use the explicit install-operator target.
+    if [[ "${OPENSHIFT_CI}" == "true" ]] && \
+        ! oc get configmap rhdh-default-config -n "${OPERATOR_NAMESPACE:-rhdh-operator-system}" &>/dev/null; then
+        echo "Bootstrapping the shared Operator (CI mode)..."
+        bash operator/install-operator.sh "$version"
+    fi
+    verify_operator_installation
+fi
+resolve_deployment_catalog_image "$installation_method" "$version"
 prepare_deploy_workdir
 
-# Resolve every requested ref before creating or changing any cluster resources.
+# Resolve every requested ref before creating or changing instance resources.
 for tool in jq yq skopeo; do
     command -v "$tool" >/dev/null || { echo "Error: Required tool '$tool' is not installed." >&2; exit 1; }
 done
@@ -183,8 +193,8 @@ fi
 
 if [[ "${WITH_NFS}" == "1" ]]; then
     _append_plugin_dynamic_config "${PWD}/config/nfs-dynamic-plugins.yaml" "NFS"
-    oc create configmap app-config-nfs \
-        --from-file=nfs-app-config.yaml="${PWD}/config/nfs-app-config.yaml" \
+    render_nfs_app_config | oc create configmap app-config-nfs \
+        --from-file=nfs-app-config.yaml=/dev/stdin \
         --namespace="${NAMESPACE}" \
         --dry-run=client -o yaml | oc apply -f - --namespace="${NAMESPACE}"
 fi
@@ -211,12 +221,6 @@ fi
 if [[ "$installation_method" == "helm" ]]; then
     source helm/deploy.sh "$namespace" "$version"
 else
-    # In CI, auto-install the operator if not already present (CI has Linux tools available)
-    # TODO(RHIDP-12127): move operator install and orchestrator support to CI step registry script
-    if [[ "${OPENSHIFT_CI}" == "true" ]] && ! oc get crd/backstages.rhdh.redhat.com &>/dev/null; then
-        echo "Operator not found, installing automatically (CI mode)..."
-        source operator/install-operator.sh "$version"
-    fi
     source operator/deploy.sh "$namespace" "$version"
 fi
 

@@ -15,9 +15,13 @@ yq -o=json '.' "${DEPLOY_ROOT}/operator/backstage.yaml" | jq \
     --argjson lightspeed "${WITH_LIGHTSPEED:-0}" --argjson provider "${LIGHTSPEED_HAS_PROVIDER:-false}" '
     .metadata.namespace = $namespace |
     .spec.application.extraEnvs.envs += [
-        {name: "RHDH_BASE_URL", value: $url},
-        {name: "CATALOG_INDEX_IMAGE", value: $catalog, containers: ["install-dynamic-plugins"]}
+        {name: "RHDH_BASE_URL", value: $url}
     ] |
+    if $catalog != "" then
+        .spec.application.extraEnvs.envs += [
+            {name: "CATALOG_INDEX_IMAGE", value: $catalog, containers: ["install-dynamic-plugins"]}
+        ]
+    else . end |
     if $nfs == 1 then
         .spec.application.appConfig.configMaps += [{name: "app-config-nfs"}]
     else . end |
