@@ -1,9 +1,3 @@
 includes:
   - dynamic-plugins.default.yaml
-plugins:
-  # Catalog index 2.1 ships a broken org plugin image (missing
-  # io.backstage.dynamic-packages annotation). Disable via {{inherit}} and use GHCR.
-  - package: oci://quay.io/rhdh/backstage-plugin-org:{{inherit}}
-    disabled: true
-  - package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-org:bs_1.54.9__0.7.8
-    disabled: false
+plugins: []
