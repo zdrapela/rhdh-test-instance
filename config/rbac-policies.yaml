@@ -8,10 +8,12 @@ data:
   rbac-policy.csv: |
     p, role:default/admin, catalog-entity, read, allow
     p, role:default/admin, catalog.entity.create, create, allow
+    p, role:default/admin, scorecard.metric.read, read, allow
 
     g, user:default/test1, role:default/admin
 
     p, role:default/developer, catalog-entity, read, allow
+    p, role:default/developer, scorecard.metric.read, read, allow
 
     g, user:default/test2, role:default/developer
 

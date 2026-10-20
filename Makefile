@@ -156,6 +156,7 @@ endif
 		-e CATALOG_INDEX_IMAGE -e CATALOG_INDEX_TAG -e RHDH_IMAGE \
 		-e OPERATOR_NAMESPACE -e OPERATOR_IIB_IMAGE -e KEYCLOAK_NS \
 		-e OPERATOR_EXPECTED_IMAGE -e OPERATOR_EXPECTED_RHDH_IMAGE -e OPERATOR_EXPECTED_CATALOG_IMAGE \
+		-e SONARQUBE_API_KEY \
 		$(RUNNER_IMAGE) \
 		bash -c 'oc login --token="$$K8S_CLUSTER_TOKEN" --server="$$K8S_CLUSTER_URL" --insecure-skip-tls-verify=true >/dev/null && source .env && $(CMD)'
 

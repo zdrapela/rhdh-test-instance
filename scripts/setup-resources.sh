@@ -83,6 +83,16 @@ create_rhdh_secrets() {
   fi
 }
 
+# GitHub metrics use public access. Only an explicitly supplied SonarQube key
+# is merged; inherited GitHub credentials are never copied into the cluster.
+configure_scorecard_credentials() {
+  [[ "${WITH_SCORECARD:-0}" == "1" ]] || return 0
+  local sonarqube_key="${SONARQUBE_API_KEY:-}"
+  [[ -n "$sonarqube_key" ]] || return 0
+  jq -n --arg sonarqube "$sonarqube_key" '{stringData: {SONARQUBE_API_KEY: $sonarqube}}' |
+    oc patch secret rhdh-secrets --namespace="${NAMESPACE}" --type=merge --patch-file=/dev/stdin
+}
+
 # =============================================================================
 # Catalog Entities
 #
@@ -352,6 +362,7 @@ setup_resources() {
   echo "=============================================="
 
   create_rhdh_secrets
+  configure_scorecard_credentials
   apply_rhdh_configmaps
   apply_catalog_entities
   apply_rbac_policies

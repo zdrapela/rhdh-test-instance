@@ -147,10 +147,41 @@ fetch_catalog_defaults() {
     return 1
 }
 
-# The older chart's Homepage 1.x extends Backstage's home plugin. Homepage 3.x
-# in the newer Operator provides its own page:homepage instead.
+# The selected catalog, including an explicit override, determines whether
+# Homepage extends Backstage's home plugin or provides its own page.
+resolve_nfs_homepage_type() {
+    local image manifest digest annotation packages
+    image=$(yq -o=json '.' "$1" | jq -er '
+        .plugins[] | select(.package | split("/")[-1] | split("@")[0] |
+            split(":")[0] | split("!")[0] == "red-hat-developer-hub-backstage-plugin-homepage") |
+        .package | sub("^oci://"; "") | split("!")[0]') || return 1
+    if ! manifest=$(skopeo --override-os linux --override-arch amd64 inspect --raw "docker://${image}"); then
+        [[ "$image" == registry.access.redhat.com/rhdh/*@sha256:* ]] || return 1
+        image="quay.io/rhdh/${image#registry.access.redhat.com/rhdh/}"
+        manifest=$(skopeo --override-os linux --override-arch amd64 inspect --raw "docker://${image}") || return 1
+    fi
+    if jq -e 'has("manifests")' <<< "$manifest" >/dev/null; then
+        digest=$(jq -er '.manifests[] | select(.platform.os == "linux" and
+            .platform.architecture == "amd64") | .digest' <<< "$manifest") || return 1
+        image="${image%@*}"
+        if [[ "${image##*/}" == *:* ]]; then image="${image%:*}"; fi
+        manifest=$(skopeo --override-os linux --override-arch amd64 inspect --raw \
+            "docker://${image}@${digest}") || return 1
+    fi
+    annotation=$(jq -er '.annotations["io.backstage.dynamic-packages"] | select(length > 0)' \
+        <<< "$manifest") || return 1
+    packages=$(printf '%s' "$annotation" | base64 -d) || return 1
+    NFS_HOMEPAGE_TYPE=$(jq -er '
+        [.[] | .[] | .backstage.features // {} | .[]] |
+        if index("@backstage/FrontendPlugin") then "plugin"
+        elif index("@backstage/FrontendModule") then "module"
+        else error("Homepage discovery metadata has no frontend feature") end' <<< "$packages") || return 1
+    export NFS_HOMEPAGE_TYPE
+    echo "Selected Homepage frontend type: ${NFS_HOMEPAGE_TYPE}" >&2
+}
+
 render_nfs_app_config() {
-    if [[ "${RESOLVED_HELM_CHART_VERSION:-}" == "2.1-119-CI" ]]; then
+    if [[ "${NFS_HOMEPAGE_TYPE:?Resolve the selected Homepage metadata first}" == "module" ]]; then
         yq '.app.extensions |= map(select(has("page:homepage") | not) |
             with_entries(.key |= sub(":homepage/", ":home/"))) |
             (.app.extensions[] | select(has("page:home")))."page:home" = {"config": {"path": "/"}}' \

@@ -41,6 +41,7 @@ permission:
       - catalog
       - permission
       - intelligent-assistant
+      - scorecard
     admin:
       superUsers:
         - name: user:default/test1
@@ -53,6 +54,11 @@ auth:
     secret: '${SESSION_SECRET}'
 
 signInPage: oidc
+
+# Public access only; GitHub credentials are not deployed to test instances.
+integrations:
+  github:
+    - host: github.com
 
 kubernetes:
   serviceLocatorMethod:

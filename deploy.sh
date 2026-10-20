@@ -147,6 +147,9 @@ done
 fetch_catalog_defaults "${DEPLOY_WORKDIR}/dynamic-plugins.default.yaml"
 mapfile -t PLUGIN_CONFIG_FILES < <(plugin_config_files)
 bash scripts/check-plugin-refs.sh "${DEPLOY_WORKDIR}/dynamic-plugins.default.yaml" "${PLUGIN_CONFIG_FILES[@]}"
+if [[ "${WITH_NFS}" == "1" ]]; then
+    resolve_nfs_homepage_type "${DEPLOY_WORKDIR}/dynamic-plugins.default.yaml"
+fi
 
 # Create or switch to the specified namespace
 oc new-project "$namespace" || oc project "$namespace"

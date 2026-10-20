@@ -22,6 +22,8 @@ jq '{plugins: [.plugins[] |
             (.package | split("/")[-1] | sub("[:!].*$"; "")) + ":test!exported-plugin")}
     ]}' "${WORK_DIR}/dynamic-plugins.json" > "${WORK_DIR}/defaults.json"
 bash "${ROOT}/scripts/check-plugin-refs.sh" "${WORK_DIR}/defaults.json" "${configs[@]}"
+yq -o=json '.' "${ROOT}/config/app-config-rhdh.yaml" | jq -e '
+    .integrations.github == [{host: "github.com"}]' >/dev/null
 
 jq '.plugins |= map(select(.package | contains("backstage-community-plugin-topology") | not))' \
     "${WORK_DIR}/defaults.json" > "${WORK_DIR}/missing.json"
@@ -85,16 +87,52 @@ image_values "$CATALOG_INDEX_IMAGE" | jq -e '
     .registry == "registry.example.test:5000" and .repository == "custom/catalog" and
     .tag == "" and (.digest | startswith("sha256:"))' >/dev/null
 
-RESOLVED_HELM_CHART_VERSION=2.1-119-CI render_nfs_app_config | yq -o=json '.' | jq -e '
+NFS_HOMEPAGE_TYPE=module render_nfs_app_config | yq -o=json '.' | jq -e '
     any(.app.extensions[]; ."page:home".config.path == "/") and
     all(.app.extensions[]; has("page:homepage") | not) and
     any(.app.extensions[]; ."home-page-widget:home/search-bar" == false) and
     (.app.quickstart | length > 0) and ."intelligent-assistant".notebooks.enabled
 ' >/dev/null
-RESOLVED_HELM_CHART_VERSION='' render_nfs_app_config | yq -o=json '.' | jq -e '
+RESOLVED_HELM_CHART_VERSION=2.1-119-CI NFS_HOMEPAGE_TYPE=plugin render_nfs_app_config | yq -o=json '.' | jq -e '
     any(.app.extensions[]; ."page:home" == false) and
     any(.app.extensions[]; ."page:homepage".config.path == "/")
 ' >/dev/null
+
+# Catalog overrides can change Homepage independently of the selected chart.
+(
+    skopeo() {
+        jq -n --arg feature "$HOMEPAGE_FEATURE" --arg export "$HOMEPAGE_EXPORT" '
+            {annotations: {"io.backstage.dynamic-packages":
+                ([{homepage: {backstage: {features: {($export): $feature,
+                    "./homepage-translations-module": "@backstage/FrontendModule"}}}}] | tojson | @base64)}}'
+    }
+    HOMEPAGE_FEATURE=@backstage/FrontendModule HOMEPAGE_EXPORT=./alpha \
+        resolve_nfs_homepage_type "${WORK_DIR}/defaults.json"
+    [[ "$NFS_HOMEPAGE_TYPE" == module ]]
+    HOMEPAGE_FEATURE=@backstage/FrontendPlugin HOMEPAGE_EXPORT=. \
+        resolve_nfs_homepage_type "${WORK_DIR}/defaults.json"
+    [[ "$NFS_HOMEPAGE_TYPE" == plugin ]]
+    skopeo() { printf '%s' '{"annotations":{}}'; }
+    if resolve_nfs_homepage_type "${WORK_DIR}/defaults.json" > "${WORK_DIR}/error" 2>&1; then
+        echo "Missing Homepage discovery metadata must fail preflight." >&2
+        exit 1
+    fi
+)
+
+# Inherited GitHub credentials must never be copied into a namespace Secret.
+(
+    source "${ROOT}/scripts/setup-resources.sh"
+    export NAMESPACE=test-ns
+    oc() {
+        jq -e '.stringData == {SONARQUBE_API_KEY: "fixture-sonarqube"}' >/dev/null
+    }
+    GITHUB_TOKEN=fixture-unused GITHUB_PERSONAL_ACCESS_TOKEN=fixture-unused SONARQUBE_API_KEY=fixture-sonarqube \
+        configure_scorecard_credentials
+    oc() { return 1; }
+    GITHUB_TOKEN=fixture-unused GITHUB_PERSONAL_ACCESS_TOKEN=fixture-unused SONARQUBE_API_KEY='' \
+        configure_scorecard_credentials
+    WITH_SCORECARD=0 GITHUB_TOKEN=fixture-unused configure_scorecard_credentials
+)
 
 # Reuse must check RC identities, not just the presence of a served CRD or CSV.
 (
@@ -204,9 +242,14 @@ if [[ -n "${RHDH_TEST_CHART:-}" ]]; then
                     yq -o=json 'select(.kind == "ConfigMap" and .data."dynamic-plugins.yaml" != null) |
                         .data."dynamic-plugins.yaml" | from_yaml' "$RHDH_TEST_RENDERED" | jq -e \
                         --argjson scorecard "$WITH_SCORECARD" '
-                        .includes == ["dynamic-plugins.default.yaml"] and
-                        all(.plugins[]; .package | startswith("ref://")) and
-                        (any(.plugins[]; .package == "ref://red-hat-developer-hub-backstage-plugin-scorecard" and .enabled) == ($scorecard == 1))
+                         .includes == ["dynamic-plugins.default.yaml"] and
+                         all(.plugins[]; .package | startswith("ref://")) and
+                         (any(.plugins[]; .package == "ref://red-hat-developer-hub-backstage-plugin-scorecard" and .enabled) == ($scorecard == 1)) and
+                         (if $scorecard == 1 then
+                             any(.plugins[]; .pluginConfig.scorecard.metricProviders.filecheck.fileExistence.options.files.readme == "README.md") and
+                             any(.plugins[]; .package == "ref://red-hat-developer-hub-backstage-plugin-scorecard-backend-module-github" and (has("pluginConfig") | not)) and
+                             any(.plugins[]; .package == "ref://red-hat-developer-hub-backstage-plugin-scorecard-backend-module-jira" and .enabled == false)
+                          else true end)
                     ' >/dev/null
                 done
             done

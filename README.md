@@ -333,13 +333,17 @@ Existing disabled integrations (Jira Scorecard and Orchestrator Loki) remain dis
 
 The catalog bundled with Helm `2.1-119-CI` references Scorecard images with empty
 discovery annotations ([RHDHBUGS-3834](https://redhat.atlassian.net/browse/RHDHBUGS-3834)).
-For this chart, omit `scorecard` from `WITH` (or use `WITHOUT=scorecard` with `WITH=all`).
-The scripts do not patch plugin metadata or catalog defaults to bypass this defect.
-Newer catalogs and the pinned Operator RC have valid Scorecard metadata; validate
-them independently rather than assuming the defect affects every 2.1 build.
-Helm `2.1-119-CI` also bundles Homepage 1.x, which extends `page:home`;
-deployment adapts the NFS homepage configuration for that chart. The newer
-Operator's Homepage 3.x uses the original `page:homepage` configuration.
+Supply the fixed `2.1-109` catalog to enable Scorecard with this chart:
+
+```bash
+make deploy-helm VERSION=2.1-119-CI WITH=nfs,orchestrator,scorecard,rbac \
+  CATALOG_INDEX_IMAGE=quay.io/rhdh/plugin-catalog-index@sha256:915486da4cf127445b28a7bf160d2298a86a62daffd0f9c9d7b980a4e2646833
+```
+
+The pinned Operator RC already bundles working Scorecard artifacts. The scripts
+inherit plugin artifacts from the selected catalog without patching metadata or
+defaults. Homepage discovery metadata determines whether to use legacy `page:home`
+or modern `page:homepage`, including when a catalog overrides an older chart.
 
 #### Supplying a catalog
 
@@ -487,6 +491,27 @@ checks; `operator/render-cr.sh` renders the actual Operator configuration direct
 ### Scorecard
 
 Enable with `WITH=scorecard`. Adds health and compliance KPI dashboards.
+
+Frontend/backend, SonarQube, Dependabot, GitHub, Filecheck and OpenSSF are enabled;
+Jira remains disabled and DORA uses the catalog's disabled default. Existing
+homepage Scorecard widgets remain hidden; entity Scorecard pages are available.
+Filecheck checks `README.md`, `LICENSE` and `.github/CODEOWNERS` using
+`scorecard.metricProviders.filecheck.fileExistence.options.files`.
+
+GitHub integrations use public access. GitHub tokens are not forwarded to the
+container runner or copied into namespace Secrets. Dependabot remains enabled
+as in the original configuration, but collecting alerts requires separately
+configured repository alert-read access. Set an optional `SONARQUBE_API_KEY` in
+`.env` or the deployment environment for private SonarQube/SonarCloud data; only
+that supplied key is merged into `rhdh-secrets`, preserving other existing keys.
+SonarQube defaults to public SonarCloud projects when no API key is supplied.
+
+Entities need `github.com/project-slug` for GitHub metrics,
+`backstage.io/source-location` for Filecheck, `github.com/dependabot: 'true'`
+to opt into Dependabot, and `sonarqube.org/project-key` for SonarQube metrics.
+The existing admin and developer roles can read Scorecard metrics, subject to
+their existing catalog permissions. Catalog-provided thresholds and schedules
+are inherited.
 
 ### Orchestrator
 
