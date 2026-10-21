@@ -91,11 +91,18 @@ NFS_HOMEPAGE_TYPE=module render_nfs_app_config | yq -o=json '.' | jq -e '
     any(.app.extensions[]; ."page:home".config.path == "/") and
     all(.app.extensions[]; has("page:homepage") | not) and
     any(.app.extensions[]; ."home-page-widget:home/search-bar" == false) and
+    any(.app.extensions[]; ."sidebar-element:app/search" == false) and
+    any(.app.extensions[]; ."sidebar-divider:app/search" == false) and
+    any(.app.extensions[]; ."home-page-widget:scorecard/scorecard-aggregated-card" == false) and
     (.app.quickstart | length > 0) and ."intelligent-assistant".notebooks.enabled
 ' >/dev/null
 RESOLVED_HELM_CHART_VERSION=2.1-119-CI NFS_HOMEPAGE_TYPE=plugin render_nfs_app_config | yq -o=json '.' | jq -e '
     any(.app.extensions[]; ."page:home" == false) and
-    any(.app.extensions[]; ."page:homepage".config.path == "/")
+    any(.app.extensions[]; ."page:homepage".config.path == "/") and
+    any(.app.extensions[]; ."sidebar-element:app/search" == false) and
+    any(.app.extensions[]; ."sidebar-divider:app/search" == false) and
+    ([.app.extensions[] | keys[] | select(startswith("home-page-widget:scorecard/"))] ==
+        ["home-page-widget:scorecard/scorecard-aggregated-card"])
 ' >/dev/null
 
 # Catalog overrides can change Homepage independently of the selected chart.

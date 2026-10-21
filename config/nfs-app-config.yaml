@@ -9,15 +9,13 @@ app:
     - api:home/visits: true
     - app-root-element:home/visit-listener: true
     - home-page-widget:homepage/quickaccess-card: false
-    - home-page-widget:scorecard/scorecard-default-aggregation: false
-    - home-page-widget:scorecard/scorecard-deprecated-metric-id: false
-    - home-page-widget:scorecard/scorecard-github-filecheck-codeowners: false
-    - home-page-widget:scorecard/scorecard-github-filecheck-license: false
-    - home-page-widget:scorecard/scorecard-github-open-prs: false
-    - home-page-widget:scorecard/scorecard-github-open-prs-weighted: false
-    - home-page-widget:scorecard/scorecard-jira-open-issues: false
+    - home-page-widget:scorecard/scorecard-aggregated-card: false
     - home-page-widget:homepage/search-bar: false
     - home-page-widget:homepage/catalog-starred-entities-card: false
+
+    # Search is provided by the global header; avoid the legacy sidebar modal.
+    - sidebar-element:app/search: false
+    - sidebar-divider:app/search: false
 
     # Keep the RHDH homepage at / instead of the bundled Backstage home page.
     - page:home: false

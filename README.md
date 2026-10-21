@@ -331,14 +331,20 @@ Plugin overrides use `ref://<image-name>` and `enabled: true/false`. Package
 URLs, versions, digests and any required `!plugin-path` come from catalog defaults.
 Existing disabled integrations (Jira Scorecard and Orchestrator Loki) remain disabled.
 
-The catalog bundled with Helm `2.1-119-CI` references Scorecard images with empty
-discovery annotations ([RHDHBUGS-3834](https://redhat.atlassian.net/browse/RHDHBUGS-3834)).
-Supply the fixed `2.1-109` catalog to enable Scorecard with this chart:
+For the 2.1 test day, Helm `2.1-162-CI` bundles application image `2.1-120`
+and the fixed `2.1-109` catalog. Use its bundled images without overrides:
 
 ```bash
-make deploy-helm VERSION=2.1-119-CI WITH=nfs,orchestrator,scorecard,rbac \
-  CATALOG_INDEX_IMAGE=quay.io/rhdh/plugin-catalog-index@sha256:915486da4cf127445b28a7bf160d2298a86a62daffd0f9c9d7b980a4e2646833
+make deploy-helm VERSION=2.1-162-CI WITH=nfs,orchestrator,scorecard,rbac \
+  CATALOG_INDEX_IMAGE= CATALOG_INDEX_TAG= RHDH_IMAGE=
 ```
+
+Helm `2.1-119-CI` bundles an older application image and Scorecard artifacts with
+empty discovery annotations
+([RHDHBUGS-3834](https://redhat.atlassian.net/browse/RHDHBUGS-3834)). Overriding
+only its catalog can also mismatch the application shell and plugin branding.
+The NFS configuration uses global-header search and disables the sidebar search
+modal. Scorecard's aggregated homepage widget remains hidden.
 
 The pinned Operator RC already bundles working Scorecard artifacts. The scripts
 inherit plugin artifacts from the selected catalog without patching metadata or
